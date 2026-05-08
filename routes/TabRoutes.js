@@ -28,7 +28,6 @@ export function TabRoutes() {
           borderTopColor: '#eee',
           height: 60,
           paddingBottom: 8,
-          marginBottom: 35,
           paddingTop: 4,
         },
         tabBarIcon: ({ focused, color, size }) => {
