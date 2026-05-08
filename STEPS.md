@@ -30,6 +30,37 @@ Ao final deste tutorial, o app terá:
 | Ideal para | Preferências, configurações, listas pequenas | Histórico longo, filtros complexos, dados relacionais |
 | Exemplo | `{ "transacoes": "[...]" }` | `SELECT * FROM transacoes WHERE tipo = 'despesa'` |
 
+### Critérios detalhados
+
+| Critério | Manter AsyncStorage | Trocar para SQLite |
+|---|---|---|
+| Tipo de dado | Preferências simples, flags, token, tema, pequenos valores em chave-valor | Dados estruturados, múltiplas tabelas, relacionamentos, histórico, filas locais |
+| Volume de dados | Poucos dados, leitura e escrita ocasionais | Volume crescente, muitos registros ou necessidade de persistência local mais organizada |
+| Consultas | Buscar por chave direta, sem filtros complexos | Filtrar, ordenar, paginar, fazer agregações e joins |
+| Concorrência | Poucas operações simples e isoladas | Mais escrita/leituras concorrentes e necessidade de consistência local |
+| Offline-first | Apenas guardar estado básico do usuário | Cache offline, sincronização posterior e dados locais mais completos |
+| Evolução do produto | App pequeno, sem crescimento forte de regras de dados | App crescendo em complexidade, com modelo de dados mais estável |
+| Manutenção | Menos código e menos estrutura | Mais trabalho inicial, mas melhor organização para dados reais do app |
+
+### Quando trocar para SQLite
+
+Vale trocar para SQLite quando o armazenamento começa a ter pelo menos um destes sinais: você precisa consultar dados por vários critérios, guardar listas grandes, manter consistência local, ou suportar modo offline com dados estruturados. Outro sinal forte é quando o AsyncStorage começa a virar uma "base improvisada" com muitos JSONs, porque aí o custo de manter e evoluir cresce rápido.
+
+### Quando manter AsyncStorage
+
+Se o app só salva tema, idioma, token, onboarding e poucas preferências, AsyncStorage continua suficiente. Também não compensa migrar para SQLite só por "parecer mais profissional", porque isso adiciona schema, migração e mais código sem necessidade prática.
+
+### Regra prática
+
+Se você está usando o armazenamento como **configuração**, fique com AsyncStorage; se está usando como **banco local**, vá para SQLite. Em apps mobile, SQLite é o caminho natural quando os dados precisam ser estruturados, pesquisáveis e preparados para crescer.
+
+**Exemplos:**
+
+- **AsyncStorage:** salvar `theme = dark`, `language = pt-BR`, `hasSeenIntro = true`
+- **SQLite:** salvar usuários, pedidos, tarefas, mensagens, cache de catálogo e relações entre entidades
+
+> **No `minhas-financas`:** a flag de primeiro acesso é configuração (AsyncStorage), e a lista de transações é banco local (SQLite). Por isso convivem os dois — cada armazenamento na sua função.
+
 ---
 
 ## Onde o SQLite aparece em apps reais
