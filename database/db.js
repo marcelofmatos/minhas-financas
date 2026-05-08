@@ -37,3 +37,44 @@ export function inserirTransacao(t) {
 export function excluirTransacao(id) {
   db.runSync('DELETE FROM transacoes WHERE id = ?', [id]);
 }
+
+// ---------------------------------------------------------------------------
+// Bônus — STEPS.md Passo 4.2 (debug opcional)
+// Descomente temporariamente para inspecionar o conteúdo da tabela no console.
+// ---------------------------------------------------------------------------
+// export function logTransacoes() {
+//   const dados = db.getAllSync('SELECT * FROM transacoes');
+//   console.log('Transações no banco:', JSON.stringify(dados, null, 2));
+// }
+
+// ---------------------------------------------------------------------------
+// Bônus — STEPS.md Passo 5 (consultas avançadas com SQL)
+// Demonstram o poder do SQL para filtrar diretamente no banco, sem trazer
+// tudo para o JavaScript. Não são usadas na tela ainda — descomente quando
+// for consumir em algum componente.
+// ---------------------------------------------------------------------------
+
+// Busca apenas despesas de uma categoria
+// export function buscarPorCategoria(categoria) {
+//   return db.getAllSync(
+//     'SELECT * FROM transacoes WHERE categoria = ? ORDER BY rowid DESC',
+//     [categoria]
+//   );
+// }
+
+// Soma total por tipo
+// export function totalPorTipo(tipo) {
+//   const resultado = db.getFirstSync(
+//     'SELECT SUM(valor) as total FROM transacoes WHERE tipo = ?',
+//     [tipo]
+//   );
+//   return resultado?.total ?? 0;
+// }
+
+// Busca transações de um período
+// export function buscarPorPeriodo(dataInicio, dataFim) {
+//   return db.getAllSync(
+//     'SELECT * FROM transacoes WHERE data BETWEEN ? AND ? ORDER BY data DESC',
+//     [dataInicio, dataFim]
+//   );
+// }
