@@ -16,6 +16,7 @@ Ao final deste tutorial, o app terá:
 - Operações de INSERT, SELECT e DELETE usando SQL
 - Migração transparente do AsyncStorage para SQLite
 - Tela de boas-vindas só na primeira abertura, com flag persistida em AsyncStorage
+- Botão **Excluir** na tela de detalhe da transação, com confirmação via Alert nativo
 
 ---
 
@@ -446,6 +447,189 @@ export default function App() {
 
 ---
 
+## Passo 7 — Botão excluir na tela de detalhe
+
+Hoje só é possível excluir uma transação com **toque longo** na lista do Dashboard. Vamos adicionar um botão **"Excluir"** visível na tela de detalhe, onde o usuário já está olhando o item e tem todo o contexto para decidir.
+
+### Por que na tela de detalhe?
+
+| | Toque longo na lista | Botão na tela de detalhe |
+|---|---|---|
+| Descoberta | Gesto oculto | Visual e óbvio |
+| Contexto | Apenas o resumo da linha | Item aberto, todos os dados à vista |
+| Risco | Pode disparar sem querer | Ação intencional após inspeção |
+
+> Os dois caminhos vão **coexistir**: o toque longo continua como atalho rápido para quem já o conhece, e o botão entra como ponto de acesso óbvio para todos os usuários.
+
+### O que vamos reaproveitar
+
+- O `TransacoesContext` já expõe `removerTransacao` (criado no Passo 3) — ele apaga no SQLite e atualiza a lista em memória
+- O Dashboard consome a lista do contexto, então re-renderiza sozinho quando a transação some
+
+Ou seja: nenhum arquivo do banco ou do contexto precisa mudar. A alteração é **só na tela de detalhe**.
+
+### 7.1 — Substitua o conteúdo completo de `screens/DetalheTransacaoScreen.js`
+
+> ⚠️ **Atenção:** copie e cole o arquivo inteiro abaixo.
+
+```jsx
+// screens/DetalheTransacaoScreen.js
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useTransacoes } from '../context/TransacoesContext';
+import { cores, espacamento, raio } from '../theme';
+
+export function DetalheTransacaoScreen({ route, navigation }) {
+  const { transacao } = route.params;  // recebe os dados via navigate()
+  const isReceita = transacao.tipo === 'receita';
+  const { removerTransacao } = useTransacoes();
+
+  function confirmarExclusao() {
+    const mensagem = `Deseja excluir "${transacao.descricao}"?`;
+    const excluir = () => {
+      removerTransacao(transacao.id);
+      navigation.goBack();
+    };
+
+    // No react-native-web, Alert.alert ignora os botões e nunca chama onPress.
+    // Usamos window.confirm para que a confirmação funcione no Expo Web.
+    if (Platform.OS === 'web') {
+      if (window.confirm(mensagem)) excluir();
+      return;
+    }
+
+    Alert.alert(
+      'Excluir transação',
+      mensagem,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Excluir', style: 'destructive', onPress: excluir },
+      ]
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+
+        {/* Botão voltar */}
+        <TouchableOpacity style={styles.botaoVoltar} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={22} color={cores.texto} />
+          <Text style={styles.textoVoltar}>Voltar</Text>
+        </TouchableOpacity>
+
+        {/* Ícone do tipo */}
+        <View style={[styles.icone, { backgroundColor: isReceita ? cores.receitaFundo : cores.despesaFundo }]}>
+          <Ionicons
+            name={isReceita ? 'arrow-up-circle' : 'arrow-down-circle'}
+            size={48}
+            color={isReceita ? cores.receita : cores.despesa}
+          />
+        </View>
+
+        <Text style={styles.descricao}>{transacao.descricao}</Text>
+        <Text style={[styles.valor, { color: isReceita ? cores.receita : cores.despesa }]}>
+          {isReceita ? '+' : '-'} R$ {transacao.valor.toFixed(2)}
+        </Text>
+
+        <View style={styles.tabela}>
+          <View style={styles.linha}>
+            <Text style={styles.rotulo}>Tipo</Text>
+            <Text style={styles.dado}>{isReceita ? 'Receita' : 'Despesa'}</Text>
+          </View>
+          <View style={styles.linha}>
+            <Text style={styles.rotulo}>Categoria</Text>
+            <Text style={styles.dado}>{transacao.categoria}</Text>
+          </View>
+          <View style={styles.linha}>
+            <Text style={styles.rotulo}>Data</Text>
+            <Text style={styles.dado}>{transacao.data}</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.botaoExcluir}
+          onPress={confirmarExclusao}
+          accessibilityRole="button"
+          accessibilityLabel="Excluir transação"
+        >
+          <Ionicons name="trash-outline" size={20} color={cores.despesa} />
+          <Text style={styles.textoExcluir}>Excluir</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: cores.fundo },
+  container: { flex: 1, padding: espacamento.md, alignItems: 'center' },
+  botaoVoltar: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    alignSelf: 'flex-start', marginBottom: espacamento.lg,
+  },
+  textoVoltar: { fontSize: 16, color: cores.texto },
+  icone: {
+    width: 88, height: 88, borderRadius: 44,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: espacamento.md,
+  },
+  descricao: { fontSize: 22, fontWeight: 'bold', color: cores.texto, marginBottom: 4 },
+  valor: { fontSize: 32, fontWeight: '800', marginBottom: espacamento.lg },
+  tabela: {
+    width: '100%', backgroundColor: cores.cartao,
+    borderRadius: raio.md, padding: espacamento.md, gap: 12,
+  },
+  linha: { flexDirection: 'row', justifyContent: 'space-between' },
+  rotulo: { fontSize: 14, color: cores.subtexto },
+  dado: { fontSize: 14, fontWeight: '600', color: cores.texto },
+  botaoExcluir: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+    marginTop: espacamento.lg,
+    paddingVertical: espacamento.md,
+    borderRadius: raio.md,
+    borderWidth: 1,
+    borderColor: cores.despesa,
+    backgroundColor: 'transparent',
+  },
+  textoExcluir: { fontSize: 16, fontWeight: '600', color: cores.despesa },
+});
+```
+
+**O que mudou em relação à versão anterior:**
+
+| Adição | Por quê |
+|---|---|
+| `Alert` no import de `react-native` | Para exibir o diálogo nativo de confirmação |
+| `useTransacoes` do contexto | Para acessar `removerTransacao` (que apaga no SQLite e atualiza a lista) |
+| Função `confirmarExclusao()` | Encapsula o fluxo: pergunta → remove → volta |
+| `style: 'destructive'` no botão "Excluir" do Alert | Padrão iOS/Android: o iOS pinta de vermelho automaticamente, sinalizando perigo |
+| `removerTransacao(transacao.id)` seguido de `navigation.goBack()` | Apaga e retorna ao Dashboard, que re-renderiza sozinho via contexto |
+| Estilos `botaoExcluir` e `textoExcluir` | Outline vermelho — ação destrutiva sem dominar a tela |
+| `accessibilityRole` e `accessibilityLabel` | Leitores de tela anunciam "Excluir transação, botão" |
+
+> **Por que outline em vez de fundo vermelho sólido?** O foco visual da tela é o **valor** da transação. Um botão sólido em vermelho competiria com ele e deixaria a tela visualmente "alarmada". O outline preserva a hierarquia: o valor continua sendo o protagonista, e o botão sinaliza claramente que é uma ação perigosa sem ofuscar o resto.
+
+> **Por que `Alert.alert` e não um Modal customizado?** O `Alert.alert` é nativo, gratuito (sem código adicional), e respeita as convenções da plataforma — no iOS aparece como um popup central, no Android como um diálogo Material. Para uma confirmação simples de "sim/não", essa é a escolha certa. Modal customizado só faz sentido quando você precisa de campos de entrada ou layout específico do app.
+
+### 7.2 — Roteiro de teste
+
+1. Adicione algumas transações de teste no app
+2. Toque em uma para abrir a tela de detalhe → o botão **Excluir** aparece abaixo da tabela
+3. Toque em **Excluir** → o Alert nativo aparece com o nome da transação na pergunta
+4. Toque em **Cancelar** → o Alert fecha, a transação continua lá ✅
+5. Repita e toque em **Excluir** no Alert → volta ao Dashboard, transação sumiu da lista ✅
+6. Feche e reabra o app → a transação excluída continua sumida (persistência confirmada) ✅
+7. Confirme que o **toque longo** na lista do Dashboard ainda funciona como atalho
+
+---
+
 ## Resultado Final
 
 | Funcionalidade | Status |
@@ -457,6 +641,7 @@ export default function App() {
 | API síncrona sem async/await | ✅ `expo-sqlite` sync API |
 | Consultas avançadas (bônus) | ✅ `WHERE`, `SUM`, `BETWEEN` |
 | Boas-vindas só no primeiro acesso | ✅ `AsyncStorage` + `PrimeiroAcessoContext` |
+| Botão excluir na tela de detalhe | ✅ `Alert.alert` + `removerTransacao` + `goBack` |
 
 ---
 
