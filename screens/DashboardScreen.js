@@ -18,6 +18,14 @@ import { CartaoCotacoes } from '../components/CartaoCotacoes';
 export function DashboardScreen({ navigation, route }) {
   const { transacoes, saldo, receitas, despesas, carregando, removerTransacao } = useTransacoes();
 
+  // Status bar claro enquanto o Dashboard está em foco (cabeçalho azul)
+  useFocusEffect(
+    React.useCallback(() => {
+      setStatusBarStyle('light');
+      return () => setStatusBarStyle('dark');
+    }, [])
+  );
+
   function confirmarExclusao(id, descricao) {
     Alert.alert(
       'Excluir transação',
@@ -49,14 +57,16 @@ export function DashboardScreen({ navigation, route }) {
           </Text>
         </View>
 
-        <CartaoSaldo
-          saldo={saldo}
-          mes={new Date().toLocaleDateString('pt-BR', { month: 'long' })}
-        />
+        <View style={styles.cards}>
+          <CartaoSaldo
+            saldo={saldo}
+            mes={new Date().toLocaleDateString('pt-BR', { month: 'long' })}
+          />
 
-        <CardsResumo receitas={receitas} despesas={despesas} />
-        
-        <CartaoCotacoes />
+          <CardsResumo receitas={receitas} despesas={despesas} />
+
+          <CartaoCotacoes />
+        </View>
 
         <View style={styles.secao}>
           <Text style={styles.tituloSecao}>Transações Recentes</Text>
@@ -103,6 +113,7 @@ const styles = StyleSheet.create({
   },
   titulo: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
   subtitulo: { color: '#bdc3c7', fontSize: 14, marginTop: 2, textTransform: 'capitalize' },
+  cards: { gap: espacamento.md, paddingTop: espacamento.md },
   secao: { padding: espacamento.md },
   tituloSecao: { fontSize: 17, fontWeight: '700', color: cores.texto, marginBottom: espacamento.md },
   vazio: { alignItems: 'center', paddingVertical: 48, gap: 8 },
