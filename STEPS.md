@@ -1,1070 +1,933 @@
-# Passo a Passo — Criando Seu Primeiro App React Native
+# Passo a Passo — Adicionando Navegação ao minhas-financas
 
-**Módulo 06 — Aula 01**  
+**Módulo 06 — Aula 03**  
 Prof. Marcelo Matos
 
-> Siga cada passo na ordem. Não pule etapas — cada uma prepara a próxima.  
-> Se algo der errado, veja a seção **Resolução de Problemas** no final.
+> Continue usando o projeto `minhas-financas` criado na Aula 2. Vamos adicionar navegação acrescentando ao que já fizemos.
 
 ---
 
 ## O que você vai construir
 
-Ao final deste tutorial, você terá um app funcionando no seu celular (ou emulador) com:
+Ao final deste tutorial, o app terá:
 
-- Um cabeçalho com o nome da escola
-- Um **contador interativo** com botões + e −
-- Uma **tabela comparando** os componentes do React Web com os do React Native
-
-Tudo isso em um único arquivo, em menos de 200 linhas de código.
+- **Barra de abas inferior** com 4 abas: Dashboard, Nova Transação, Relatório, Sobre
+- **Dashboard** — tela da Aula 2 com o saldo e lista de transações
+- **Nova Transação** — formulário para digitar descrição, valor, tipo e categoria
+- **Relatório** — resumo de receitas x despesas do mês
+- **Sobre** — informações do app
+- Ao salvar uma nova transação, ela aparece imediatamente na lista do Dashboard
 
 ---
 
-## Antes de Começar — Checklist de Instalações
+## Antes de Começar — Checklist
 
-Antes de digitar qualquer comando, confirme que você tem o seguinte:
+- [ ] Projeto `minhas-financas` da Aula 2 funcionando
+- [ ] `npm install` já executado na Aula 2
+- [ ] Expo Go no celular (ou emulador Android)
+- [ ] VS Code aberto na pasta do projeto
 
-### 1. Node.js
+---
 
-O Node.js é o motor que executa o JavaScript fora do navegador. Precisamos dele para rodar o Expo.
+## Passo 1 — Instalar o React Navigation
 
-**Como verificar:**
-
-Abra o terminal e digite:
+### 1.1 — Abra o terminal na pasta do projeto
 
 ```bash
-node -v
+cd minhas-financas
 ```
 
-**O que deve aparecer:** algo como `v20.20.1` ou `v22.x.x`.
+### 1.2 — Instale as dependências
 
-> **Onde fica o terminal?**
-> - **Windows:** Pressione `Windows + R`, digite `cmd` e pressione Enter. Ou pesquise por "Prompt de Comando" no menu Iniciar.
-> - **Mac:** Pressione `Cmd + Espaço`, pesquise "Terminal" e abra.
-> - **Linux:** Pressione `Ctrl + Alt + T`.
-
-Se aparecer `'node' não é reconhecido` ou `command not found`, o Node não está instalado:
-1. Acesse https://nodejs.org
-2. Clique no botão verde **LTS** (versão recomendada)
-3. Baixe e instale normalmente
-4. Feche e reabra o terminal
-5. Execute `node -v` novamente
-
----
-
-### 2. VS Code
-
-O VS Code é o editor de código que usaremos para escrever o app.
-
-**Como verificar:** Tente abrir o VS Code. Se não estiver instalado:
-1. Acesse https://code.visualstudio.com
-2. Clique em **Download for Windows/Mac/Linux**
-3. Instale normalmente
-
-**Extensão recomendada:** Após instalar o VS Code, abra-o, clique no ícone de extensões (4 quadrados no menu lateral esquerdo) e instale:
-- **ES7+ React/Redux/React-Native snippets** — autocompleta código mais rápido
-
----
-
-### 3. Expo Go (no seu celular)
-
-O **Expo Go** é um app que permite ver seu projeto rodando no celular em tempo real, sem precisar publicar na loja.
-
-- **Android (Google Play):** https://play.google.com/store/apps/details?id=host.exp.exponent
-- **iPhone (App Store):** https://apps.apple.com/app/expo-go/id982107779
-
-> Sem celular? Não tem problema — use o emulador Android. Veja as instruções na seção [Usando o Emulador Android](#usando-o-emulador-android) no final.
-
-> **Importante:** Seu celular e seu computador precisam estar conectados na **mesma rede Wi-Fi** para o Expo Go funcionar.
-
----
-
-## Passo 1 — Criar o Projeto
-
-### 1.1 — Abra o terminal
-
-Abra o terminal do seu sistema operacional (não dentro do VS Code por enquanto).
-
-### 1.2 — Navegue até uma pasta conveniente
-
-Vamos salvar o projeto na Área de Trabalho (Desktop). No terminal, digite:
-
-**Windows:**
-```bash
-cd Desktop
-```
-
-**Mac/Linux:**
-```bash
-cd ~/Desktop
-```
-
-> O comando `cd` significa "Change Directory" — muda a pasta atual. É como clicar em uma pasta no Explorer/Finder, mas pelo teclado.
-
-### 1.3 — Crie o projeto
+Execute cada comando abaixo:
 
 ```bash
-npx create-expo-app ola-iteam --template blank
+npm install @react-navigation/native
+npx expo install react-native-screens react-native-safe-area-context
+npm install @react-navigation/bottom-tabs
+npm install @react-navigation/native-stack
 ```
 
-**O que cada parte desse comando faz:**
+> **Por que tantos pacotes?** O React Navigation é modular — você instala apenas o que precisa. `native-screens` melhora a performance usando telas nativas do sistema operacional.
 
-| Parte | Significado |
-|-------|-------------|
-| `npx` | Executa um programa sem precisar instalar antes |
-| `create-expo-app` | Ferramenta oficial para criar projetos Expo |
-| `ola-iteam` | Nome da pasta que será criada (e nome do app) |
-| `--template blank` | Começa com o mínimo de código, sem extras |
+> **Sobre o `react-native-safe-area-context`:** além de ser dependência do React Navigation, esse pacote fornece um `SafeAreaView` mais confiável do que o do `react-native` (que só funciona no iOS e está em vias de deprecação). A partir de agora, **todo `SafeAreaView` do projeto será importado de `react-native-safe-area-context`**, garantindo que o conteúdo respeite o notch e a barra de status em iOS e Android.
 
-**O que vai acontecer no terminal:**
+### 1.3 — Verifique a instalação
 
-O terminal vai mostrar mensagens de progresso enquanto baixa os arquivos necessários. Isso pode levar de 1 a 3 minutos dependendo da sua internet.
+Após instalar, o `package.json` deve ter estas dependências:
 
-Quando terminar, você verá uma mensagem parecida com esta:
-
-```
-✅ Your project is ready!
-
-To run your project, navigate to the directory and run one of the following npm commands.
-
-- cd ola-iteam
-- npm run android
-- npm run ios
-- npm run web
-```
-
-Se você viu essa mensagem — **o projeto foi criado com sucesso!**
-
----
-
-## Passo 2 — Abrir no VS Code
-
-### 2.1 — Entre na pasta do projeto
-
-```bash
-cd ola-iteam
-```
-
-> Agora você está dentro da pasta `ola-iteam`. Todo comando que você rodar a partir daqui vai acontecer dentro desse projeto.
-
-### 2.2 — Abra o VS Code
-
-```bash
-code .
-```
-
-> O `.` (ponto) significa "a pasta atual". Esse comando diz ao VS Code: "abra a pasta que estou agora".
-
-O VS Code vai abrir com o projeto carregado no painel esquerdo.
-
----
-
-### Entendendo a estrutura do projeto
-
-No painel esquerdo do VS Code (chamado de **Explorer**), você vai ver a seguinte estrutura:
-
-```
-ola-iteam/
-│
-├── node_modules/    ← Não mexa aqui. São as bibliotecas instaladas automaticamente.
-│                      Pode ter milhares de arquivos — é normal.
-│
-├── assets/          ← Coloque aqui imagens, fontes e ícones do app.
-│
-├── App.js           ← ★ ESTE É O ARQUIVO QUE VAMOS EDITAR ★
-│
-├── app.json         ← Configurações do app: nome, ícone, splash screen.
-│                      Não vamos mexer aqui hoje.
-│
-├── babel.config.js  ← Configuração do "tradutor" de código. Não precisa editar.
-│
-└── package.json     ← Lista de dependências e scripts do projeto.
-```
-
-> Foque no **App.js**. É o único arquivo que vamos modificar nessa aula.
-
----
-
-## Passo 3 — Rodar o App pela Primeira Vez
-
-### 3.1 — Inicie o servidor de desenvolvimento
-
-No terminal (ainda dentro da pasta `ola-iteam`), execute:
-
-```bash
-npx expo start
-```
-
-> Se o terminal foi fechado, abra um novo e navegue de volta: `cd Desktop/ola-iteam`
-
-O terminal vai exibir algo como:
-
-```
-Starting project at /Users/voce/Desktop/ola-iteam
-
-› Metro waiting on exp://192.168.1.100:8081
-› Scan the QR code above with Expo Go (Android) or the Camera app (iOS)
-
-› Press a │ open Android
-› Press w │ open web
-› Press r │ reload app
-› Press ? │ show all commands
-
-[QR CODE APARECE AQUI]
-```
-
-### 3.2 — Veja o app no celular
-
-**Android:**
-1. Abra o app **Expo Go** no celular
-2. Toque em **"Scan QR code"**
-3. Aponte a câmera para o QR code no terminal
-4. Aguarde carregar (pode levar 20-30 segundos na primeira vez)
-
-**iPhone:**
-1. Abra o app da **Câmera** nativa do iPhone
-2. Aponte para o QR code
-3. Toque na notificação que aparecer: "Abrir no Expo Go"
-
-### 3.3 — O que você deve ver
-
-A tela padrão do Expo com o texto:
-
-> **"Open up App.js to start working on your app!"**
-
-Essa é a tela inicial padrão. Vamos substituí-la completamente nos próximos passos.
-
----
-
-### O que é o Hot Reload?
-
-> **Dica importante:** Mantenha o terminal com o `npx expo start` rodando **durante todo o desenvolvimento**.
->
-> Sempre que você **salvar o App.js** (`Ctrl+S`), o app vai atualizar automaticamente no celular ou emulador. Não precisa reiniciar nada. Isso se chama **Hot Reload** e é uma das grandes vantagens do desenvolvimento com Expo.
-
----
-
-## Passo 4 — Entendendo o App.js Padrão
-
-Clique no arquivo **App.js** no VS Code para abri-lo. Você verá este código:
-
-```jsx
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
-
-export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
-```
-
-Antes de modificar, vamos entender o que cada parte faz:
-
----
-
-### As linhas de `import`
-
-```jsx
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
-```
-
-Isso importa os componentes que vamos usar. É como o `import` do React.js que você já conhece — a diferença é a **fonte**: aqui vem de `'react-native'` em vez de `'react-dom'`.
-
----
-
-### O componente principal
-
-```jsx
-export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
+```json
+{
+  "dependencies": {
+    "@react-navigation/bottom-tabs": "^7.x.x",
+    "@react-navigation/native": "^7.x.x",
+    "@react-navigation/native-stack": "^7.x.x",
+    "react-native-screens": "~4.x.x",
+    "react-native-safe-area-context": "~5.x.x"
+  }
 }
 ```
 
-**Exatamente igual ao React.js!** É um componente funcional que retorna JSX. A única diferença são as tags:
-
-| No React Web | No React Native | Por quê muda? |
-|---|---|---|
-| `<div>` | `<View>` | Renderiza um container nativo, não HTML |
-| `<p>` ou `<span>` | `<Text>` | Renderiza texto nativo do sistema operacional |
-| `onClick` | `onPress` | Evento de toque em vez de clique de mouse |
-
-> **Regra importante:** Em React Native, **todo texto deve estar dentro de um componente `<Text>`**. Não funciona colocar texto diretamente dentro de `<View>`.
-
 ---
 
-### Os estilos
+## Passo 2 — Criar a estrutura de pastas
 
-```jsx
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+### 2.1 — Crie as pastas `screens` e `routes`
+
+```bash
+mkdir screens routes
 ```
 
-Isso é o equivalente ao CSS, mas escrito como um objeto JavaScript. As principais diferenças:
+### 2.2 — Estrutura que teremos ao final
 
-| CSS | StyleSheet (React Native) |
-|-----|--------------------------|
-| `background-color: #fff` | `backgroundColor: '#fff'` (camelCase) |
-| Classes em arquivo `.css` | Objeto dentro do próprio arquivo `.js` |
-| `px`, `em`, `%` | Apenas números (sem unidade) |
-
-O `flex: 1` faz o container ocupar toda a tela disponível. `alignItems: 'center'` e `justifyContent: 'center'` centralizam o conteúdo — exatamente como o Flexbox do CSS.
-
----
-
-## Passo 5 — Etapa 1: Olá, ITEAM!
-
-Vamos substituir o conteúdo padrão pelo nosso app.
-
-### 5.1 — Selecione tudo no App.js
-
-No VS Code, com o **App.js** aberto:
-1. Clique dentro do arquivo
-2. Pressione **`Ctrl + A`** (Windows/Linux) ou **`Cmd + A`** (Mac) para selecionar tudo
-3. Pressione **Delete** ou **Backspace** para apagar
-
-### 5.2 — Cole o código abaixo
-
-```jsx
-import { View, Text, StyleSheet } from 'react-native';
-
-export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.titulo}>Olá, ITEAM! 🚀</Text>
-      <Text style={styles.subtitulo}>Módulo 06 — Aula 01</Text>
-      <Text style={styles.subtitulo}>Introdução ao React Native</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f2f4f7',
-  },
-  titulo: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#ff9500',
-    marginBottom: 4,
-  },
-  subtitulo: {
-    fontSize: 14,
-    color: '#777',
-  },
-});
+```
+minhas-financas/
+├── App.js
+├── routes/
+│   ├── TabRoutes.js                      ← barra de abas (Passo 6)
+│   └── DashboardStack.js                 ← stack com detalhe (Passo 8)
+├── screens/
+│   ├── DashboardScreen.js                ← tela principal (Passo 3)
+│   ├── NovaTransacaoScreen.js            ← formulário (Passo 4)
+│   ├── RelatorioScreen.js                ← resumo mensal (Passo 5)
+│   ├── SobreScreen.js                    ← sobre o app (Passo 5)
+│   ├── DetalheTransacaoScreen.js         ← detalhe de transação (Passo 8)
+│   └── BoasVindasScreen.js               ← tela de boas-vindas (Passo 9)
+├── components/                           ← da Aula 2
+├── theme.js                              ← da Aula 2
+└── package.json
 ```
 
-### 5.3 — Salve o arquivo
-
-Pressione **`Ctrl + S`** (Windows/Linux) ou **`Cmd + S`** (Mac).
-
-O app no celular vai atualizar automaticamente em 1-2 segundos.
+> Nesta aula, começamos apenas com `screens/` e `routes/` vazios. Os arquivos acima serão criados ao longo dos passos indicados entre parênteses.
 
 ---
 
-### O que você deve ver agora
+## Passo 3 — Criar a DashboardScreen
 
-- Fundo cinza claro
-- Texto **"Olá, ITEAM! 🚀"** em laranja, grande, no centro da tela
-- Abaixo: "Módulo 06 — Aula 01" em cinza
+A `DashboardScreen` parte do conteúdo da tela principal da Aula 2 (cabeçalho, `CartaoSaldo`, `CardsResumo` e a lista de transações), mas ganha três responsabilidades novas:
 
----
+- **recebe `navigation` e `route`** como props — toda tela registrada no React Navigation as recebe automaticamente;
+- **escuta `route.params.novaTransacao`** com um `useEffect` para inserir transações criadas no formulário no topo da lista;
+- **ajusta o status bar** com `useFocusEffect` para que os ícones do sistema fiquem legíveis sobre o cabeçalho azul.
 
-### Entendendo o código novo
-
-**Por que removemos o `import { StatusBar }`?**
-
-Não vamos usar a `StatusBar` nessa versão. Em JavaScript/React, se você importar algo e não usar, pode receber um aviso. Por isso removemos o import.
-
-**O que mudou nos estilos:**
+### 3.1 — Crie `screens/DashboardScreen.js`
 
 ```jsx
-titulo: {
-  fontSize: 32,       // tamanho da fonte (equivalente ao font-size no CSS)
-  fontWeight: 'bold', // negrito
-  color: '#ff9500',   // cor laranja (código hexadecimal)
-  marginBottom: 4,    // espaço abaixo do texto (como margin-bottom no CSS)
-},
-```
+// screens/DashboardScreen.js
+import React from 'react';
+import { ScrollView, View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { CartaoSaldo } from '../components/CartaoSaldo';
+import { CardsResumo } from '../components/CardsResumo';
+import { ItemTransacao } from '../components/ItemTransacao';
+import { cores, espacamento } from '../theme';
 
-**Por que `#ff9500`?** É o código da cor laranja. Você pode trocar por qualquer cor hexadecimal. Experimente `'#e74c3c'` (vermelho) ou `'#3498db'` (azul) e veja o resultado!
-
----
-
-## Passo 6 — Etapa 2: Adicionando Interatividade com useState
-
-Agora vamos adicionar um contador com botões. Isso vai provar que o `useState` funciona **exatamente igual** ao React.js — sem nenhuma modificação.
-
-### 6.1 — Substitua todo o App.js
-
-Selecione tudo (`Ctrl+A`), delete e cole:
-
-```jsx
-import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-
-export default function App() {
-  // useState — IDÊNTICO ao React.js ⚛️
-  const [contador, setContador] = useState(0);
-
-  return (
-    <View style={styles.container}>
-
-      {/* Cabeçalho */}
-      <Text style={styles.titulo}>Olá, ITEAM! 🚀</Text>
-      <Text style={styles.subtitulo}>Módulo 06 — Aula 01</Text>
-
-      {/* Card do contador */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitulo}>⚛️ useState — igual ao React.js</Text>
-
-        {/* Número atual do contador */}
-        <Text style={styles.contador}>{contador}</Text>
-
-        {/* Linha de botões */}
-        <View style={styles.botoes}>
-
-          {/* Botão − (diminuir) */}
-          <TouchableOpacity
-            style={[styles.botao, styles.botaoCinza]}
-            onPress={() => setContador(contador - 1)}
-          >
-            <Text style={styles.botaoTexto}>−</Text>
-          </TouchableOpacity>
-
-          {/* Botão Reset */}
-          <TouchableOpacity
-            style={[styles.botao, styles.botaoBranco]}
-            onPress={() => setContador(0)}
-          >
-            <Text style={styles.botaoTextoReset}>Reset</Text>
-          </TouchableOpacity>
-
-          {/* Botão + (aumentar) */}
-          <TouchableOpacity
-            style={styles.botao}
-            onPress={() => setContador(contador + 1)}
-          >
-            <Text style={styles.botaoTexto}>+</Text>
-          </TouchableOpacity>
-
-        </View>
-      </View>
-
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f2f4f7',
-    padding: 20,
-  },
-  titulo: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#ff9500',
-    marginBottom: 4,
-  },
-  subtitulo: {
-    fontSize: 14,
-    color: '#777',
-    marginBottom: 24,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,      // cantos arredondados
-    padding: 20,
-    width: '100%',
-    alignItems: 'center',
-    elevation: 3,          // sombra no Android
-    shadowColor: '#000',   // sombra no iOS
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-  },
-  cardTitulo: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#222',
-    marginBottom: 16,
-  },
-  contador: {
-    fontSize: 72,
-    fontWeight: 'bold',
-    color: '#ff9500',
-    marginBottom: 16,
-  },
-  botoes: {
-    flexDirection: 'row',  // coloca os botões lado a lado (como display:flex no CSS)
-    gap: 12,               // espaço entre os botões
-  },
-  botao: {
-    backgroundColor: '#ff9500',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 10,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  botaoCinza: {
-    backgroundColor: '#555',
-  },
-  botaoBranco: {
-    backgroundColor: '#eee',
-  },
-  botaoTexto: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  botaoTextoReset: {
-    color: '#555',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-});
-```
-
-### 6.2 — Salve e teste
-
-Pressione `Ctrl+S`. Toque nos botões `+`, `−` e `Reset` no celular.
-
----
-
-### Entendendo as novidades
-
-**`useState`** — absolutamente igual ao React.js:
-
-```jsx
-const [contador, setContador] = useState(0);
-//     ↑ valor    ↑ função para mudar   ↑ valor inicial
-```
-
-Quando você chama `setContador(contador + 1)`, o React atualiza o estado e redesenha a tela com o novo valor. Isso é reatividade — exatamente como você aprendeu no Módulo 4.
-
----
-
-**`TouchableOpacity`** — o equivalente ao `<button>` do HTML:
-
-```jsx
-<TouchableOpacity onPress={() => setContador(contador + 1)}>
-  <Text style={styles.botaoTexto}>+</Text>
-</TouchableOpacity>
-```
-
-| React Web | React Native |
-|-----------|--------------|
-| `<button onClick={...}>` | `<TouchableOpacity onPress={...}>` |
-
-Quando pressionado, o botão fica levemente transparente (daí o nome "Opacity"). Isso dá um feedback visual ao usuário de que o toque foi registrado.
-
----
-
-**`flexDirection: 'row'`** — alinha os botões lado a lado:
-
-```jsx
-botoes: {
-  flexDirection: 'row',  // ← bota os filhos em linha horizontal
-  gap: 12,               // ← espaço de 12 pixels entre eles
-},
-```
-
-> **Atenção — diferença importante!**  
-> No CSS web, o padrão de `flexDirection` é `'row'` (horizontal).  
-> No React Native, o padrão é **`'column'`** (vertical — de cima para baixo).  
-> Por isso, quando queremos botões lado a lado, precisamos declarar explicitamente `flexDirection: 'row'`.
-
----
-
-**`[styles.botao, styles.botaoCinza]`** — aplicando múltiplos estilos:
-
-```jsx
-style={[styles.botao, styles.botaoCinza]}
-```
-
-Quando você coloca os estilos em um **array**, o React Native funde os dois objetos. Propriedades do segundo sobrescrevem as do primeiro. É como combinar duas classes CSS no mesmo elemento.
-
----
-
-## Passo 7 — Etapa 3: Lista com `.map()` e ScrollView
-
-Agora vamos adicionar uma tabela comparando os componentes Web com os do React Native, usando o `.map()` — exatamente como você faria no React.js.
-
-Também vamos adicionar o `ScrollView` para que a tela possa ser rolada quando o conteúdo for maior que a tela.
-
-### 7.1 — Substitua todo o App.js
-
-```jsx
-import { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  SafeAreaView,
-} from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-
-// ──────────────────────────────────────────────────────────
-// Dados da tabela de comparação
-// (declarados fora do componente — boa prática)
-// ──────────────────────────────────────────────────────────
-const COMPARACOES = [
-  { web: '<div>',         nativo: '<View>' },
-  { web: '<p> / <span>',  nativo: '<Text>' },
-  { web: 'CSS',           nativo: 'StyleSheet' },
-  { web: 'onClick',       nativo: 'onPress' },
-  { web: 'react-dom',     nativo: 'react-native' },
+const TRANSACOES_INICIAIS = [
+  { id: '1', descricao: 'Salário', valor: 3200, tipo: 'receita', categoria: 'salario', data: '01/05/2026' },
+  { id: '2', descricao: 'Aluguel', valor: 900, tipo: 'despesa', categoria: 'moradia', data: '05/05/2026' },
+  { id: '3', descricao: 'Supermercado', valor: 280.50, tipo: 'despesa', categoria: 'alimentacao', data: '07/05/2026' },
+  { id: '4', descricao: 'Energia', valor: 400, tipo: 'despesa', categoria: 'moradia', data: '09/05/2026' },
+  { id: '5', descricao: 'Água', valor: 70.50, tipo: 'despesa', categoria: 'moradia', data: '10/05/2026' },
 ];
 
-export default function App() {
-  const [contador, setContador] = useState(0);
+export function DashboardScreen({ navigation, route }) {
+  const [transacoes, setTransacoes] = React.useState(TRANSACOES_INICIAIS);
+
+  // Recebe novas transações vindas da tela de formulário
+  React.useEffect(() => {
+    if (route.params?.novaTransacao) {
+      setTransacoes(prev => [route.params.novaTransacao, ...prev]);
+    }
+  }, [route.params?.novaTransacao]);
+
+  // Status bar claro enquanto o Dashboard está em foco (cabeçalho azul)
+  useFocusEffect(
+    React.useCallback(() => {
+      setStatusBarStyle('light');
+      return () => setStatusBarStyle('dark');
+    }, [])
+  );
+
+  const receitas = transacoes
+    .filter(t => t.tipo === 'receita')
+    .reduce((acc, t) => acc + t.valor, 0);
+
+  const despesas = transacoes
+    .filter(t => t.tipo === 'despesa')
+    .reduce((acc, t) => acc + t.valor, 0);
 
   return (
-    // SafeAreaView evita que o conteúdo fique atrás da
-    // "franjinha" (notch) ou barra de status do celular
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
-
-      {/* ScrollView permite rolar a tela */}
-      <ScrollView contentContainerStyle={styles.scroll}>
-
-        {/* ── CABEÇALHO ──────────────────────────── */}
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.cabecalho}>
-          <Text style={styles.titulo}>Olá, ITEAM! 🚀</Text>
-          <Text style={styles.subtitulo}>Módulo 06 — Aula 01</Text>
-          <Text style={styles.subtitulo}>Introdução ao React Native</Text>
+          <Text style={styles.titulo}>Minhas Finanças</Text>
+          <Text style={styles.subtitulo}>Maio 2026</Text>
         </View>
 
-        {/* ── CARD 1: CONTADOR ───────────────────── */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitulo}>⚛️  useState — igual ao React.js</Text>
-          <Text style={styles.cardDescricao}>
-            O mesmo hook que você usa no React Web funciona aqui sem nenhuma mudança.
-          </Text>
+        <CartaoSaldo saldo={receitas - despesas} mes="Maio" />
+        <CardsResumo receitas={receitas} despesas={despesas} />
 
-          <Text style={styles.contador}>{contador}</Text>
-
-          <View style={styles.botoes}>
-            <TouchableOpacity
-              style={[styles.botao, styles.botaoCinza]}
-              onPress={() => setContador(contador - 1)}
-            >
-              <Text style={styles.botaoTexto}>−</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.botao, styles.botaoBranco]}
-              onPress={() => setContador(0)}
-            >
-              <Text style={styles.botaoTextoReset}>Reset</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.botao}
-              onPress={() => setContador(contador + 1)}
-            >
-              <Text style={styles.botaoTexto}>+</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ── CARD 2: TABELA DE COMPARAÇÃO ──────── */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitulo}>🔄  Web → Mobile</Text>
-          <Text style={styles.cardDescricao}>
-            Pequenas adaptações — a lógica permanece a mesma.
-          </Text>
-
-          {/* .map() funciona IGUAL ao React.js */}
-          {COMPARACOES.map((item) => (
-            <View key={item.web} style={styles.linha}>
-              <View style={styles.coluna}>
-                <Text style={styles.tag}>{item.web}</Text>
-              </View>
-              <Text style={styles.seta}>→</Text>
-              <View style={styles.coluna}>
-                <Text style={[styles.tag, styles.tagNativo]}>{item.nativo}</Text>
-              </View>
-            </View>
+        <View style={styles.secao}>
+          <Text style={styles.tituloSecao}>Transações Recentes</Text>
+          {transacoes.map(t => (
+            <ItemTransacao
+              key={t.id}
+              descricao={t.descricao}
+              valor={t.valor}
+              tipo={t.tipo}
+              categoria={t.categoria}
+              data={t.data}
+              // Navega para o detalhe passando a transação inteira via route.params
+              // (a tela DetalheTransacao será criada no Passo 8)
+              onPress={() => navigation.navigate('DetalheTransacao', { transacao: t })}
+            />
           ))}
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// Constante de cor para reutilizar (evita repetição)
-const LARANJA = '#ff9500';
-
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#f2f4f7',
-  },
-  scroll: {
-    padding: 20,
-    paddingBottom: 40,
-  },
+  safeArea: { flex: 1, backgroundColor: cores.primaria },
+  scroll: { flex: 1, backgroundColor: cores.fundo },
   cabecalho: {
-    alignItems: 'center',
-    marginBottom: 24,
-    paddingTop: 12,
+    backgroundColor: cores.primaria,
+    paddingHorizontal: espacamento.md,
+    paddingVertical: espacamento.lg,
   },
-  titulo: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: LARANJA,
-    marginBottom: 4,
-  },
-  subtitulo: {
-    fontSize: 14,
-    color: '#777',
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 20,
-    marginBottom: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-  },
-  cardTitulo: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#222',
-    marginBottom: 6,
-  },
-  cardDescricao: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-  contador: {
-    fontSize: 72,
-    fontWeight: 'bold',
-    color: LARANJA,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  botoes: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  botao: {
-    backgroundColor: LARANJA,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 10,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  botaoCinza: { backgroundColor: '#555' },
-  botaoBranco: { backgroundColor: '#eee' },
-  botaoTexto: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  botaoTextoReset: {
-    color: '#555',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  linha: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  coluna: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  tag: {
-    backgroundColor: '#f0f0f0',
-    color: '#c0392b',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  tagNativo: {
-    backgroundColor: '#e8f4fd',
-    color: '#2471a3',
-  },
-  seta: {
-    fontSize: 18,
-    color: '#aaa',
-    marginHorizontal: 8,
-  },
+  titulo: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  subtitulo: { color: '#bdc3c7', fontSize: 14, marginTop: 2 },
+  secao: { padding: espacamento.md },
+  tituloSecao: { fontSize: 17, fontWeight: '700', color: cores.texto, marginBottom: espacamento.md },
 });
 ```
 
-### 7.2 — Salve e teste
+> **Por que `edges={['top']}` no `SafeAreaView`?** O fundo do `SafeAreaView` é azul escuro (`cores.primaria`), pois o cabeçalho precisa cobrir o status bar. Sem essa prop, no Android a `SafeAreaView` também aplica padding na parte de baixo — pintando uma faixa azul logo acima do tab bar. Limitando ao topo, o respiro inferior fica por conta do próprio Tab Navigator.
 
-Role a tela para baixo e veja a tabela de comparação.
-
----
-
-### Entendendo as novidades
-
-**`SafeAreaView`** — evita sobreposição com a interface do celular:
-
-```jsx
-<SafeAreaView style={styles.safe}>
-  {/* O conteúdo fica dentro da área segura da tela */}
-</SafeAreaView>
-```
-
-Em celulares modernos com "franjinha" (notch) ou barra dinâmica (Dynamic Island no iPhone), o `SafeAreaView` garante que seu conteúdo não fique escondido atrás dessas áreas.
+> **Por que o `useFocusEffect` mexendo no status bar?** No Android, os ícones do status bar (relógio, sinal, bateria) são pretos por padrão e ficam ilegíveis sobre o cabeçalho azul. O `useFocusEffect` do React Navigation roda quando a tela entra em foco e roda o cleanup quando sai — perfeito para deixar os ícones claros só no Dashboard e voltar ao escuro nas outras abas. O `setStatusBarStyle` vem do `expo-status-bar` (já incluído no template Expo).
 
 ---
 
-**`ScrollView`** — habilita a rolagem:
+## Passo 4 — Criar a NovaTransacaoScreen
+
+### 4.1 — Crie `screens/NovaTransacaoScreen.js`
 
 ```jsx
-<ScrollView contentContainerStyle={styles.scroll}>
-  {/* Todo conteúdo aqui pode ser rolado */}
-</ScrollView>
-```
+// screens/NovaTransacaoScreen.js
+import React, { useState } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity,
+  ScrollView, StyleSheet, Alert
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { cores, espacamento, raio } from '../theme';
 
-Sem o `ScrollView`, se o conteúdo for maior que a tela, ele simplesmente fica cortado e o usuário não consegue acessar o restante. Com ele, o usuário pode deslizar o dedo para ver tudo.
-
-> **Detalhe:** o `ScrollView` tem duas props de estilo:
-> - `style` → estiliza o próprio container do scroll (a "caixa")
-> - `contentContainerStyle` → estiliza o conteúdo interno (o que está dentro)
->
-> Usamos `contentContainerStyle` para dar `padding` ao conteúdo.
-
----
-
-**`.map()` com `key`** — exatamente igual ao React.js:
-
-```jsx
-{COMPARACOES.map((item) => (
-  <View key={item.web} style={styles.linha}>
-    <Text>{item.web}</Text>
-    <Text>{item.nativo}</Text>
-  </View>
-))}
-```
-
-O `key` é obrigatório quando renderizamos listas. Ele ajuda o React a identificar qual item mudou, foi adicionado ou removido. Use sempre um valor **único** para cada item — aqui usamos `item.web` porque cada elemento da Web tem um nome diferente.
-
----
-
-**Dados declarados fora do componente:**
-
-```jsx
-const COMPARACOES = [
-  { web: '<div>', nativo: '<View>' },
-  ...
+const CATEGORIAS = [
+  { id: 'alimentacao', label: 'Alimentação', icone: 'restaurant' },
+  { id: 'transporte', label: 'Transporte', icone: 'car' },
+  { id: 'saude', label: 'Saúde', icone: 'medical' },
+  { id: 'lazer', label: 'Lazer', icone: 'game-controller' },
+  { id: 'moradia', label: 'Moradia', icone: 'home' },
+  { id: 'salario', label: 'Salário', icone: 'cash' },
+  { id: 'outros', label: 'Outros', icone: 'ellipsis-horizontal-circle' },
 ];
+
+export function NovaTransacaoScreen({ navigation }) {
+  const [descricao, setDescricao] = useState('');
+  const [valor, setValor] = useState('');
+  const [tipo, setTipo] = useState('despesa');
+  const [categoria, setCategoria] = useState('outros');
+
+  const salvar = () => {
+    // Validação básica
+    if (!descricao.trim()) {
+      Alert.alert('Atenção', 'Digite uma descrição para a transação.');
+      return;
+    }
+    const valorNumerico = parseFloat(valor.replace(',', '.'));
+    if (!valor || isNaN(valorNumerico) || valorNumerico <= 0) {
+      Alert.alert('Atenção', 'Digite um valor válido maior que zero.');
+      return;
+    }
+
+    const novaTransacao = {
+      id: Date.now().toString(),
+      descricao: descricao.trim(),
+      valor: valorNumerico,
+      tipo,
+      categoria,
+      data: new Date().toLocaleDateString('pt-BR'),
+    };
+
+    // Passa a nova transação para o screen DashboardHome (dentro do DashboardStack)
+    navigation.navigate('Dashboard', {
+      screen: 'DashboardHome',
+      params: { novaTransacao },
+    });
+
+    // Limpa o formulário
+    setDescricao('');
+    setValor('');
+    setTipo('despesa');
+    setCategoria('outros');
+  };
+
+  return (
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      <Text style={styles.tituloPagina}>Nova Transação</Text>
+
+      {/* Tipo: Receita ou Despesa */}
+      <Text style={styles.label}>Tipo</Text>
+      <View style={styles.seletor}>
+        {['receita', 'despesa'].map(t => (
+          <TouchableOpacity
+            key={t}
+            style={[
+              styles.botaoTipo,
+              tipo === t && { backgroundColor: t === 'receita' ? cores.receita : cores.despesa }
+            ]}
+            onPress={() => setTipo(t)}
+          >
+            <Ionicons
+              name={t === 'receita' ? 'arrow-up' : 'arrow-down'}
+              size={18}
+              color={tipo === t ? '#fff' : '#555'}
+            />
+            <Text style={[styles.textoTipo, tipo === t && { color: '#fff' }]}>
+              {t === 'receita' ? 'Receita' : 'Despesa'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Descrição */}
+      <Text style={styles.label}>Descrição</Text>
+      <TextInput
+        style={styles.input}
+        value={descricao}
+        onChangeText={setDescricao}
+        placeholder="Ex: Supermercado, Salário..."
+        maxLength={50}
+        returnKeyType="next"
+      />
+
+      {/* Valor */}
+      <Text style={styles.label}>Valor (R$)</Text>
+      <TextInput
+        style={styles.input}
+        value={valor}
+        onChangeText={setValor}
+        placeholder="0,00"
+        keyboardType="decimal-pad"
+        returnKeyType="done"
+      />
+
+      {/* Categoria */}
+      <Text style={styles.label}>Categoria</Text>
+      <View style={styles.categorias}>
+        {CATEGORIAS.map(cat => (
+          <TouchableOpacity
+            key={cat.id}
+            style={[
+              styles.chipCategoria,
+              categoria === cat.id && styles.chipAtivo
+            ]}
+            onPress={() => setCategoria(cat.id)}
+          >
+            <Ionicons
+              name={cat.icone}
+              size={16}
+              color={categoria === cat.id ? '#fff' : cores.subtexto}
+            />
+            <Text style={[
+              styles.textoChip,
+              categoria === cat.id && { color: '#fff' }
+            ]}>
+              {cat.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Botão Salvar */}
+      <TouchableOpacity style={styles.botaoSalvar} onPress={salvar} activeOpacity={0.8}>
+        <Ionicons name="checkmark" size={22} color="#fff" />
+        <Text style={styles.textoBotao}>Salvar Transação</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: cores.fundo, padding: espacamento.md },
+  tituloPagina: {
+    fontSize: 22, fontWeight: 'bold', color: cores.texto,
+    marginTop: espacamento.lg, marginBottom: espacamento.lg,
+  },
+  label: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: espacamento.xs },
+  input: {
+    borderWidth: 1, borderColor: '#ddd', borderRadius: raio.sm,
+    padding: 12, fontSize: 16, marginBottom: espacamento.md,
+    backgroundColor: '#fff',
+  },
+  seletor: { flexDirection: 'row', gap: 12, marginBottom: espacamento.md },
+  botaoTipo: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, padding: 12, borderRadius: raio.sm,
+    borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff',
+  },
+  textoTipo: { fontSize: 15, fontWeight: '600', color: '#555' },
+  categorias: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: espacamento.lg },
+  chipCategoria: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingVertical: 6, paddingHorizontal: 12,
+    borderRadius: raio.pill, borderWidth: 1, borderColor: '#ddd',
+    backgroundColor: '#fff',
+  },
+  chipAtivo: { backgroundColor: cores.primaria, borderColor: cores.primaria },
+  textoChip: { fontSize: 13, color: cores.subtexto },
+  botaoSalvar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: cores.primaria, padding: 16,
+    borderRadius: raio.md, marginBottom: espacamento.xl,
+  },
+  textoBotao: { color: '#fff', fontSize: 16, fontWeight: '700' },
+});
 ```
 
-Declaramos o array `COMPARACOES` fora da função `App()` porque esses dados **nunca mudam**. Se colocássemos dentro, o React recriaria o array a cada renderização — desnecessário. Dados estáticos ficam fora; dados que mudam ficam dentro (como o `contador`).
-
 ---
 
-## Passo 8 — Versão Final Completa
+## Passo 5 — Criar a RelatorioScreen e a SobreScreen
 
-A versão final do projeto (na pasta `ola-iteam/App.js`) inclui **um card a mais**: a **Arquitetura em 3 camadas** do React Native, mostrando JavaScript Layer → Bridge → Native Layer de forma visual.
-
-Você pode comparar com o que construiu e estudar as diferenças.
-
-### Como ver a versão final
-
-Se você seguiu esse tutorial dentro da pasta `ola-iteam` criada no **Passo 1**, o seu `App.js` está atualizado com o código do Passo 7.
-
-Para ver a versão do professor com o card de Arquitetura:
-1. Abra o arquivo `App.js` da pasta `ola-iteam` que o professor disponibilizou
-2. O padrão é o mesmo: `CAMADAS.map(...)` gerando os blocos coloridos
-
----
-
-## Resumo do que Você Aprendeu
-
-| Conceito | React Web | React Native | É diferente? |
-|----------|-----------|--------------|:---:|
-| Componente funcional | `function App()` | `function App()` | Não |
-| Estado com hook | `useState` | `useState` | Não |
-| Loop em lista | `.map()` | `.map()` | Não |
-| Comentários no JSX | `{/* ... */}` | `{/* ... */}` | Não |
-| Container | `<div>` | `<View>` | Só o nome |
-| Texto | `<p>`, `<span>` | `<Text>` | Só o nome |
-| Clique / toque | `onClick` | `onPress` | Só o nome |
-| Botão | `<button>` | `<TouchableOpacity>` | Só o nome |
-| Rolar a página | nativo do browser | `<ScrollView>` | Sim |
-| Estilos | arquivo `.css` | `StyleSheet.create({})` | Formato |
-| Flexbox padrão | `row` (horizontal) | `column` (vertical) | Sim |
-| Unidades CSS | `px`, `em`, `%` | apenas números | Sim |
-
----
-
-## Resolução de Problemas Comuns
-
-### "command not found: npx" ou "'npx' não é reconhecido"
-
-O Node.js não está instalado ou não está no PATH do sistema.
-
-**Solução:**
-1. Baixe o Node.js em https://nodejs.org (versão LTS)
-2. Instale e reinicie o computador
-3. Abra um novo terminal e tente novamente
-
----
-
-### O app não atualiza após salvar o arquivo
-
-**Soluções, tente nessa ordem:**
-1. Verifique se o arquivo foi salvo (`Ctrl+S`)
-2. Pressione `r` no terminal onde o Expo está rodando
-3. Agite o celular (literalmente) para abrir o menu do Expo → toque em **Reload**
-4. Pare o servidor (`Ctrl+C` no terminal) e rode `npx expo start` novamente
-
----
-
-### Erro: "Text strings must be rendered within a `<Text>` component"
-
-Você colocou texto diretamente dentro de um `<View>` sem envolver em `<Text>`.
+### 5.1 — Crie `screens/RelatorioScreen.js`
 
 ```jsx
-// ❌ Errado — vai causar erro
-<View>
-  Olá
-</View>
+// screens/RelatorioScreen.js
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { cores, espacamento, raio } from '../theme';
 
-// ✅ Correto
-<View>
-  <Text>Olá</Text>
-</View>
+export function RelatorioScreen() {
+  // Na Aula 4, estes dados virão do Context (AsyncStorage)
+  const receitas = 3700;
+  const despesas = 2206.30;
+  const saldo = receitas - despesas;
+  const total = receitas + despesas;
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <Text style={styles.titulo}>Relatório — Maio 2026</Text>
+
+        <View style={styles.barra}>
+          <View style={[styles.segmento, {
+            flex: receitas / total,
+            backgroundColor: cores.receita,
+          }]} />
+          <View style={[styles.segmento, {
+            flex: despesas / total,
+            backgroundColor: cores.despesa,
+          }]} />
+        </View>
+
+        <View style={styles.legenda}>
+          <View style={styles.itemLegenda}>
+            <View style={[styles.ponto, { backgroundColor: cores.receita }]} />
+            <Text style={styles.textoLegenda}>Receitas</Text>
+            <Text style={styles.valorLegenda}>R$ {receitas.toFixed(2)}</Text>
+          </View>
+          <View style={styles.itemLegenda}>
+            <View style={[styles.ponto, { backgroundColor: cores.despesa }]} />
+            <Text style={styles.textoLegenda}>Despesas</Text>
+            <Text style={styles.valorLegenda}>R$ {despesas.toFixed(2)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.saldoContainer}>
+          <Text style={styles.saldoLabel}>Saldo do mês</Text>
+          <Text style={[styles.saldoValor, { color: saldo >= 0 ? cores.receita : cores.despesa }]}>
+            R$ {saldo.toFixed(2)}
+          </Text>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: cores.fundo },
+  container: { flex: 1, padding: espacamento.md },
+  titulo: { fontSize: 20, fontWeight: 'bold', color: cores.texto, marginBottom: espacamento.lg },
+  barra: {
+    flexDirection: 'row', height: 24, borderRadius: raio.pill,
+    overflow: 'hidden', marginBottom: espacamento.md,
+  },
+  segmento: { height: '100%' },
+  legenda: { gap: 12, marginBottom: espacamento.lg },
+  itemLegenda: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ponto: { width: 12, height: 12, borderRadius: 6 },
+  textoLegenda: { flex: 1, fontSize: 15, color: cores.texto },
+  valorLegenda: { fontSize: 15, fontWeight: '700', color: cores.texto },
+  saldoContainer: {
+    backgroundColor: cores.cartao, borderRadius: raio.md,
+    padding: espacamento.md, alignItems: 'center',
+  },
+  saldoLabel: { fontSize: 14, color: cores.subtexto },
+  saldoValor: { fontSize: 28, fontWeight: 'bold', marginTop: 4 },
+});
 ```
-
-Procure no seu código onde há texto solto (sem `<Text>`) e corrija.
 
 ---
 
-### Erro: "Unable to resolve module..." ou "Cannot find module..."
+### 5.2 — Crie `screens/SobreScreen.js`
 
-As dependências não foram instaladas corretamente.
+```jsx
+// screens/SobreScreen.js
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { cores, espacamento } from '../theme';
 
-**Solução:**
+export function SobreScreen() {
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <Text style={styles.titulo}>Minhas Finanças</Text>
+        <Text style={styles.versao}>Versão 1.0.0</Text>
+        <Text style={styles.descricao}>
+          App de controle financeiro pessoal desenvolvido durante o Módulo 06
+          do Curso de Capacitação em Desenvolvimento Full Stack — ITEAM.
+        </Text>
+        <Text style={styles.tech}>React Native · Expo · AsyncStorage</Text>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: cores.fundo },
+  container: { flex: 1, padding: espacamento.md, justifyContent: 'center', alignItems: 'center' },
+  titulo: { fontSize: 26, fontWeight: 'bold', color: cores.texto, marginBottom: 4 },
+  versao: { fontSize: 14, color: cores.subtexto, marginBottom: espacamento.lg },
+  descricao: { fontSize: 15, color: cores.texto, textAlign: 'center', lineHeight: 22, marginBottom: espacamento.md },
+  tech: { fontSize: 13, color: cores.subtexto },
+});
+```
+
+---
+
+## Passo 6 — Criar as rotas de navegação
+
+### 6.1 — Crie `routes/TabRoutes.js`
+
+```jsx
+// routes/TabRoutes.js
+import React from 'react';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
+// A aba Dashboard aponta para um Stack (criado no Passo 8), não diretamente para a tela
+import { DashboardStack } from './DashboardStack';
+import { NovaTransacaoScreen } from '../screens/NovaTransacaoScreen';
+import { RelatorioScreen } from '../screens/RelatorioScreen';
+import { SobreScreen } from '../screens/SobreScreen';
+
+const Tab = createBottomTabNavigator();
+
+const ICONES_TAB = {
+  Dashboard: { ativa: 'home', inativa: 'home-outline' },
+  'Nova Transação': { ativa: 'add-circle', inativa: 'add-circle-outline' },
+  Relatório: { ativa: 'bar-chart', inativa: 'bar-chart-outline' },
+  Sobre: { ativa: 'information-circle', inativa: 'information-circle-outline' },
+};
+
+export function TabRoutes() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: '#2c3e50',
+        tabBarInactiveTintColor: '#95a5a6',
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor: '#eee',
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 4,
+        },
+        tabBarIcon: ({ focused, color, size }) => {
+          const { ativa, inativa } = ICONES_TAB[route.name];
+          return <Ionicons name={focused ? ativa : inativa} size={size} color={color} />;
+        },
+      })}
+    >
+      <Tab.Screen name="Dashboard" component={DashboardStack} />
+      <Tab.Screen name="Nova Transação" component={NovaTransacaoScreen} />
+      <Tab.Screen name="Relatório" component={RelatorioScreen} />
+      <Tab.Screen name="Sobre" component={SobreScreen} />
+    </Tab.Navigator>
+  );
+}
+```
+
+> **Observação:** o import de `DashboardStack` aponta para um arquivo que ainda não existe — ele será criado no Passo 8. O app só compila por inteiro quando o Passo 8 estiver concluído.
+
+---
+
+## Passo 7 — Atualizar o App.js
+
+### 7.1 — Substitua o conteúdo do `App.js`
+
+```jsx
+// App.js
+import React, { useState } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { TabRoutes } from './routes/TabRoutes';
+// BoasVindasScreen será criada no Passo 9
+import { BoasVindasScreen } from './screens/BoasVindasScreen';
+
+export default function App() {
+  // Controla qual "árvore" de componentes é renderizada (navegação condicional, Passo 9)
+  const [primeiroAcesso, setPrimeiroAcesso] = useState(true);
+
+  // Se for o primeiro acesso, mostra a tela de boas-vindas
+  // fora do NavigationContainer — ela não precisa de navegação
+  if (primeiroAcesso) {
+    return (
+      <SafeAreaProvider>
+        <BoasVindasScreen onConcluir={() => setPrimeiroAcesso(false)} />
+      </SafeAreaProvider>
+    );
+  }
+
+  return (
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <TabRoutes />
+      </NavigationContainer>
+    </SafeAreaProvider>
+  );
+}
+```
+
+> **Por que o `SafeAreaProvider`?** Ele expõe (via Context) os valores das áreas seguras do dispositivo (notch, barra de status, home indicator). O `SafeAreaView` que importamos de `react-native-safe-area-context` lê esses valores e aplica o `padding` correto em qualquer tela do app — por isso o Provider precisa ficar no nível mais alto possível.
+
+> **Observação:** o import de `BoasVindasScreen` aponta para um arquivo que ainda não existe — ele será criado no Passo 9. O app só compila por inteiro quando os Passos 8 e 9 estiverem concluídos.
+
+---
+
+## Passo 8 — Stack Navigator: Tela de Detalhe da Transação
+
+O **Stack Navigator** empilha telas umas sobre as outras — ao navegar, a nova tela entra pela direita; ao voltar, sai pela direita. É o padrão de navegação mais comum em apps mobile.
+
+Vamos usá-lo para abrir uma tela de detalhe ao tocar em uma transação no Dashboard.
+
+### 8.1 — Crie `screens/DetalheTransacaoScreen.js`
+
+```jsx
+// screens/DetalheTransacaoScreen.js
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { cores, espacamento, raio } from '../theme';
+
+export function DetalheTransacaoScreen({ route, navigation }) {
+  const { transacao } = route.params;  // recebe os dados via navigate()
+  const isReceita = transacao.tipo === 'receita';
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+
+        {/* Botão voltar */}
+        <TouchableOpacity style={styles.botaoVoltar} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={22} color={cores.texto} />
+          <Text style={styles.textoVoltar}>Voltar</Text>
+        </TouchableOpacity>
+
+        {/* Ícone do tipo */}
+        <View style={[styles.icone, { backgroundColor: isReceita ? cores.receitaFundo : cores.despesaFundo }]}>
+          <Ionicons
+            name={isReceita ? 'arrow-up-circle' : 'arrow-down-circle'}
+            size={48}
+            color={isReceita ? cores.receita : cores.despesa}
+          />
+        </View>
+
+        <Text style={styles.descricao}>{transacao.descricao}</Text>
+        <Text style={[styles.valor, { color: isReceita ? cores.receita : cores.despesa }]}>
+          {isReceita ? '+' : '-'} R$ {transacao.valor.toFixed(2)}
+        </Text>
+
+        <View style={styles.tabela}>
+          <View style={styles.linha}>
+            <Text style={styles.rotulo}>Tipo</Text>
+            <Text style={styles.dado}>{isReceita ? 'Receita' : 'Despesa'}</Text>
+          </View>
+          <View style={styles.linha}>
+            <Text style={styles.rotulo}>Categoria</Text>
+            <Text style={styles.dado}>{transacao.categoria}</Text>
+          </View>
+          <View style={styles.linha}>
+            <Text style={styles.rotulo}>Data</Text>
+            <Text style={styles.dado}>{transacao.data}</Text>
+          </View>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: cores.fundo },
+  container: { flex: 1, padding: espacamento.md, alignItems: 'center' },
+  botaoVoltar: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    alignSelf: 'flex-start', marginBottom: espacamento.lg,
+  },
+  textoVoltar: { fontSize: 16, color: cores.texto },
+  icone: {
+    width: 88, height: 88, borderRadius: 44,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: espacamento.md,
+  },
+  descricao: { fontSize: 22, fontWeight: 'bold', color: cores.texto, marginBottom: 4 },
+  valor: { fontSize: 32, fontWeight: '800', marginBottom: espacamento.lg },
+  tabela: {
+    width: '100%', backgroundColor: cores.cartao,
+    borderRadius: raio.md, padding: espacamento.md, gap: 12,
+  },
+  linha: { flexDirection: 'row', justifyContent: 'space-between' },
+  rotulo: { fontSize: 14, color: cores.subtexto },
+  dado: { fontSize: 14, fontWeight: '600', color: cores.texto },
+});
+```
+
+---
+
+### 8.2 — Crie `routes/DashboardStack.js`
+
+Este arquivo envolve o Dashboard em um Stack, permitindo empilhar a tela de detalhe sobre ele.
+
+```jsx
+// routes/DashboardStack.js
+import React from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { DashboardScreen } from '../screens/DashboardScreen';
+import { DetalheTransacaoScreen } from '../screens/DetalheTransacaoScreen';
+
+const Stack = createNativeStackNavigator();
+
+export function DashboardStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="DashboardHome" component={DashboardScreen} />
+      <Stack.Screen name="DetalheTransacao" component={DetalheTransacaoScreen} />
+    </Stack.Navigator>
+  );
+}
+```
+
+---
+
+### 8.3 — Como o Stack se conecta com o resto do app
+
+Os arquivos do Passo 6 e do Passo 4 já foram preparados para esta integração:
+
+- **`routes/TabRoutes.js`** já importa `DashboardStack` (em vez de `DashboardScreen`) e o usa como `component` da aba Dashboard. Assim, quando o usuário toca em uma transação, o Stack consegue empilhar a `DetalheTransacaoScreen` por cima.
+- **`screens/DashboardScreen.js`** já chama `navigation.navigate('DetalheTransacao', { transacao: t })` no `onPress` do `ItemTransacao`, passando a transação inteira como parâmetro. Na `DetalheTransacaoScreen`, esse objeto é lido com `route.params.transacao`.
+- **`screens/NovaTransacaoScreen.js`** já usa o formato aninhado `navigation.navigate('Dashboard', { screen: 'DashboardHome', params: { novaTransacao } })`. Como `Dashboard` agora é um **Stack**, os parâmetros precisam ser direcionados ao screen interno `DashboardHome` — caso contrário ficam no nível do Stack e a lista do Dashboard não atualiza ao salvar.
+
+> **Como funciona a passagem de parâmetros:**
+> - `navigation.navigate('NomeDaTela', { chave: valor })` — envia os dados
+> - `route.params.chave` — recebe os dados na tela de destino
+> - O objeto pode ter qualquer estrutura: strings, números, objetos inteiros
+
+> **Por que a estrutura `{ screen, params }`?** É o formato padrão do React Navigation para alcançar um screen aninhado dentro de outro navigator. `screen` é o nome do screen interno e `params` é o objeto que chega em `route.params` daquele screen.
+
+---
+
+## Passo 9 — Navegação Condicional: Tela de Boas-vindas
+
+A **navegação condicional** exibe telas diferentes dependendo do estado do app — o padrão mais comum é mostrar uma tela de boas-vindas no primeiro acesso.
+
+### 9.1 — Crie `screens/BoasVindasScreen.js`
+
+```jsx
+// screens/BoasVindasScreen.js
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { cores, espacamento, raio } from '../theme';
+
+export function BoasVindasScreen({ onConcluir }) {
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <Ionicons name="wallet" size={80} color={cores.receita} />
+        <Text style={styles.titulo}>Bem-vindo ao{'\n'}Minhas Finanças!</Text>
+        <Text style={styles.subtitulo}>
+          Controle suas receitas e despesas de forma simples e rápida.
+        </Text>
+
+        <View style={styles.recursos}>
+          {[
+            { icone: 'add-circle-outline', texto: 'Registre receitas e despesas' },
+            { icone: 'stats-chart-outline', texto: 'Veja seu saldo em tempo real' },
+            { icone: 'save-outline', texto: 'Dados salvos no seu dispositivo' },
+          ].map((item, i) => (
+            <View key={i} style={styles.recurso}>
+              <Ionicons name={item.icone} size={22} color={cores.primaria} />
+              <Text style={styles.textoRecurso}>{item.texto}</Text>
+            </View>
+          ))}
+        </View>
+
+        <TouchableOpacity style={styles.botao} onPress={onConcluir} activeOpacity={0.8}>
+          <Text style={styles.textoBotao}>Começar</Text>
+          <Ionicons name="arrow-forward" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: cores.fundo },
+  container: {
+    flex: 1, padding: espacamento.md,
+    justifyContent: 'center', alignItems: 'center', gap: 16,
+  },
+  titulo: {
+    fontSize: 28, fontWeight: 'bold', color: cores.texto,
+    textAlign: 'center', lineHeight: 36,
+  },
+  subtitulo: { fontSize: 15, color: cores.subtexto, textAlign: 'center', lineHeight: 22 },
+  recursos: { gap: 12, marginVertical: 8 },
+  recurso: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  textoRecurso: { fontSize: 15, color: cores.texto },
+  botao: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: cores.primaria, paddingVertical: 14,
+    paddingHorizontal: 32, borderRadius: raio.pill, marginTop: 8,
+  },
+  textoBotao: { color: '#fff', fontSize: 16, fontWeight: '700' },
+});
+```
+
+### 9.2 — Como o App.js usa a tela de boas-vindas
+
+O `App.js` do Passo 7 já contém toda a lógica condicional pronta:
+
+- importa `BoasVindasScreen` de `./screens/BoasVindasScreen`;
+- mantém o estado `primeiroAcesso` (iniciado em `true`);
+- se `primeiroAcesso === true`, renderiza `<BoasVindasScreen onConcluir={...} />` fora do `NavigationContainer`;
+- ao receber `onConcluir`, chama `setPrimeiroAcesso(false)` e troca para o app principal (`NavigationContainer` + `TabRoutes`).
+
+Assim, basta criar o arquivo `screens/BoasVindasScreen.js` (Passo 9.1) — não é necessário mexer no `App.js`.
+
+> **Como funciona:** o estado `primeiroAcesso` controla qual "árvore" de componentes é renderizada. Quando o usuário toca em "Começar", `setPrimeiroAcesso(false)` troca para o app principal. Em produção, esse estado seria persistido no AsyncStorage para não mostrar a tela toda vez que o app abrir.
+
+---
+
+## Resultado Final
+
+| Funcionalidade | Como foi feita |
+|----------------|----------------|
+| Barra de abas | `createBottomTabNavigator` |
+| Ícones nas abas | `tabBarIcon` + `Ionicons` |
+| Aba Sobre | `SobreScreen` como 4ª aba |
+| Formulário de transação | `TextInput` + `useState` |
+| Salvando e voltando | `navigation.navigate()` com parâmetros |
+| Recebendo dados | `route.params` |
+| Tela de detalhe | `createNativeStackNavigator` dentro de uma aba |
+| Passagem de parâmetros | `navigate('Tela', { dado })` → `route.params.dado` |
+| Navegação condicional | Estado no `App.js` controla qual navigator renderizar |
+
+---
+
+## Resolução de Problemas
+
+### "Unable to resolve module @react-navigation/..."
+Reinstale todos os pacotes de navegação do Passo 1.2:
 ```bash
-npm install
+npm install @react-navigation/native
+npx expo install react-native-screens react-native-safe-area-context
+npm install @react-navigation/bottom-tabs
+npm install @react-navigation/native-stack
+```
+Em seguida, derrube o Metro (Ctrl+C no terminal do Expo) e rode `npx expo start -c` para limpar o cache.
+
+### Aparece uma faixa azul acima da barra de abas (só no celular)
+Acontece quando o `SafeAreaView` do `DashboardScreen` está com fundo azul (`cores.primaria`) e aplica `padding` também na borda inferior. No Android, esse padding vira uma faixa colorida acima do tab bar. Limite a safe area só ao topo:
+```jsx
+<SafeAreaView style={styles.safeArea} edges={['top']}>
+```
+A borda inferior é cuidada automaticamente pelo Tab Navigator.
+
+### Ícones do status bar (relógio, sinal, bateria) ilegíveis no Dashboard
+No Android, esses ícones são pretos por padrão e somem sobre o cabeçalho azul. Use `useFocusEffect` no `DashboardScreen` para deixá-los claros enquanto a tela está em foco e voltar ao escuro quando o usuário troca de aba:
+```jsx
+import { useFocusEffect } from '@react-navigation/native';
+import { setStatusBarStyle } from 'expo-status-bar';
+
+useFocusEffect(
+  React.useCallback(() => {
+    setStatusBarStyle('light');
+    return () => setStatusBarStyle('dark');
+  }, [])
+);
 ```
 
-Execute isso dentro da pasta do projeto. Depois reinicie com `npx expo start`.
+### A nova transação não aparece no Dashboard ao voltar
+Duas causas possíveis:
 
----
+**1) O `useEffect` não está observando `route.params?.novaTransacao`** no `DashboardScreen`:
 
-### O QR code não funciona / celular não conecta
-
-Isso é problema de rede.
-
-**Soluções:**
-1. Certifique-se de que o **celular e o computador estão na mesma rede Wi-Fi**
-2. **Desative qualquer VPN** no computador e no celular — VPNs bloqueiam a comunicação local entre dispositivos e causam erro de timeout
-3. Se estiver em rede corporativa ou da escola, ela pode bloquear as conexões — use o hotspot do celular e conecte o computador nele
-4. No terminal, pressione `s` para alternar o modo de conexão (tunnel)
-5. Use `npx expo start --tunnel` — isso cria um túnel pela internet sem precisar da mesma rede
-
----
-
-### "expo: command not found" ao rodar `expo start`
-
-Você está usando o comando antigo. Use sempre:
-
-```bash
-npx expo start
+```jsx
+useEffect(() => {
+  if (route.params?.novaTransacao) {
+    setTransacoes(prev => [route.params.novaTransacao, ...prev]);
+  }
+}, [route.params?.novaTransacao]);
 ```
 
-(com `npx` na frente)
+**2) O `salvar` da `NovaTransacaoScreen` está usando o formato direto** em vez do aninhado. Como `Dashboard` é um Stack (e não um screen direto), os parâmetros precisam alcançar o screen interno `DashboardHome` (veja Passo 8.3):
+```jsx
+navigation.navigate('Dashboard', {
+  screen: 'DashboardHome',
+  params: { novaTransacao },
+});
+```
 
----
+### O teclado cobre os campos no formulário
+Substitua `<ScrollView>` por `<KeyboardAvoidingView>`:
+```jsx
+import { KeyboardAvoidingView, Platform } from 'react-native';
 
-### Erro de sintaxe / tela vermelha no app
+<KeyboardAvoidingView
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  style={{ flex: 1 }}
+>
+```
 
-Uma tela vermelha com texto branco indica um erro no seu código JavaScript.
+### O app fecha ao navegar
+Certifique-se de que `NavigationContainer` está no nível mais alto do `App.js`, fora de qualquer outro componente.
 
-**O que fazer:**
-1. Leia a mensagem de erro — ela indica a linha do problema
-2. Verifique se todas as chaves `{` têm seu fechamento `}`
-3. Verifique se todas as tags JSX estão fechadas: `<View>...</View>` ou `<Text />`
-4. Verifique se todos os parênteses e colchetes estão balanceados
-5. Compare seu código com o do tutorial linha por linha
+### Tela em branco ao abrir o app
+Verifique se no `DashboardScreen.js` o `import React from 'react'` está no topo do arquivo. Sem esse import, `React.useState` e `React.useEffect` ficam undefined e o app não renderiza nada. Os logs no navegador também pode oferecer pistas sobre o problema.
 
----
+### `route.params` está `undefined` na tela de detalhe
+Confirme que você está passando os parâmetros no `navigate`:
+```jsx
+navigation.navigate('DetalheTransacao', { transacao: t })
+//                   ↑ nome exato da Screen  ↑ objeto com os dados
+```
+E que o nome da Screen no Stack corresponde exatamente ao que foi usado no `navigate`.
 
-## Usando o Emulador Android
-
-Se você não tiver celular disponível, pode usar um celular virtual no computador.
-
-### Passo 1 — Instalar o Android Studio
-
-1. Acesse https://developer.android.com/studio
-2. Clique em **Download Android Studio**
-3. Instale normalmente (pode demorar — é um arquivo grande, ~1GB)
-
-### Passo 2 — Criar um dispositivo virtual
-
-1. Abra o **Android Studio**
-2. Na tela inicial, clique em **More Actions** (ou abra qualquer projeto)
-3. Clique em **Virtual Device Manager**
-4. Clique no botão **+** ou **Create Device**
-5. Escolha **Pixel 8** (ou qualquer outro) → clique em **Next**
-6. Escolha a imagem do sistema: **Android 14 (API 34)** → clique em **Next**
-7. Clique em **Finish**
-
-### Passo 3 — Iniciar o emulador
-
-1. No Virtual Device Manager, clique no botão ▶️ ao lado do dispositivo criado
-2. Aguarde o celular virtual aparecer na tela (pode levar 1-2 minutos)
-
-### Passo 4 — Conectar ao Expo
-
-1. Com o emulador aberto e o `npx expo start` rodando no terminal, pressione a tecla **`a`**
-2. O Expo vai instalar o app Expo Go automaticamente no emulador e abrir o projeto
-
----
-
-**Parabéns por chegar até aqui! 🎉**
-
-Você criou do zero um app React Native com estado interativo e lista dinâmica. Na próxima aula vamos explorar Flexbox mobile em profundidade e criar componentes reutilizáveis.
