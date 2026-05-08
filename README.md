@@ -1,316 +1,673 @@
-# Aula 02 — Componentes e Estilos
+# Aula 03 — Navegação e Rotas
 
 ## Objetivos da Aula
 
-Criar componentes reutilizáveis com Flexbox mobile, aplicar `StyleSheet` avançado e integrar ícones com `@expo/vector-icons` e React Native Paper.
+Configurar o React Navigation com Tab e Stack Navigators e passar dados entre telas com `navigation.navigate` e `route.params`.
 
 ---
 
 ## O Projeto desta Aula
 
-A partir desta aula, começamos a construir o **minhas-financas** — um app de gerenciamento financeiro pessoal que evoluirá ao longo de todo o módulo.
+Continuamos o **minhas-financas**. Ao final desta aula, o app terá:
 
-Ao final da Aula 4, você terá um app real, funcional e publicável.
-
----
-
-## StyleSheet Avançado
-
-### Organização de estilos
-
-Em projetos maiores, manter todos os estilos em um único `StyleSheet` no final do arquivo já não é suficiente. A melhor prática é criar arquivos de tema e reutilizar variáveis:
-
-```jsx
-// theme.js — cores e tamanhos globais
-export const cores = {
-  primaria: '#2ecc71',   // verde — receitas
-  perigo: '#e74c3c',     // vermelho — despesas
-  fundo: '#f5f6fa',
-  cartao: '#ffffff',
-  texto: '#2c3e50',
-  subtexto: '#7f8c8d',
-};
-
-export const espacamento = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-};
-// Usando o tema no componente:
-import { cores, espacamento } from './theme';
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: cores.fundo,
-    padding: espacamento.md,
-  },
-  titulo: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: cores.texto,
-    marginBottom: espacamento.sm,
-  },
-});
-```
-
-### Composição de estilos com arrays
-
-No React Native você pode passar um **array de estilos** — o último tem prioridade:
-
-```jsx
-// Estilo base + variação condicional:
-<View style={[styles.cartao, isDestacado && styles.cartaoDestacado]}>
-  <Text style={[styles.texto, { color: valor > 0 ? '#2ecc71' : '#e74c3c' }]}>
-    R$ {valor}
-  </Text>
-</View>
-
-const styles = StyleSheet.create({
-  cartao: {
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-  },
-  cartaoDestacado: {
-    borderWidth: 2,
-    borderColor: '#2ecc71',
-  },
-  texto: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
-```
+| Aba | Tela | O que faz |
+|-----|------|-----------|
+| Dashboard | `DashboardScreen` | Saldo + lista de transações (Aula 2) |
+| Nova Transação | `NovaTransacaoScreen` | Formulário para adicionar transação |
+| Relatório | `RelatorioScreen` | Resumo visual de receitas e despesas |
 
 ---
 
-## Flexbox Mobile
+## Por que precisamos de Navegação?
 
-O React Native usa Flexbox por padrão em **todos** os componentes. A diferença crítica em relação ao CSS web:
+Apps reais têm múltiplas telas. Sem navegação, tudo precisaria ficar em um único arquivo — o que rapidamente se torna impossível de manter.
 
-| Propriedade | CSS Web | React Native |
-|-------------|---------|--------------|
-| `flexDirection` padrão | `row` | **`column`** |
-| Unidades | `px`, `%`, `rem` | apenas números (dp) |
-| `display: flex` | precisa declarar | **sempre ativo** |
+Três padrões de navegação mais comuns no mobile:
 
-### As propriedades mais usadas
+| Padrão | Exemplo | Componente |
+|--------|---------|------------|
+| Stack (pilha) | Detalhes → Editar → Salvar | `Stack.Navigator` |
+| Tab (abas) | Dashboard / Perfil / Config | `Tab.Navigator` |
+| Drawer (gaveta lateral) | Menu hamburguer | `Drawer.Navigator` |
 
-```jsx
-<View style={{
-  flex: 1,                        // ocupa todo o espaço disponível
-  flexDirection: 'row',           // filhos lado a lado (padrão: 'column')
-  justifyContent: 'space-between',// eixo principal: início, fim, centro, espaço
-  alignItems: 'center',           // eixo cruzado: centro, início, fim, stretch
-  flexWrap: 'wrap',               // quebra linha quando não cabe
-  gap: 8,                         // espaço entre filhos (RN 0.71+)
-}}>
-```
+No minhas-financas usaremos **Tab + Stack combinados**: abas na parte inferior e uma tela de formulário empilhada sobre o Dashboard.
 
 ---
 
-## Componentes Reutilizáveis
+## Instalação do React Navigation
 
-### CartaoSaldo
-
-Exibe o saldo total com cor dinâmica (verde se positivo, vermelho se negativo). Usa `Math.abs()` para sempre mostrar o número positivo e operador ternário para selecionar a cor.
-
-### ItemTransacao
-
-Cada linha da lista: ícone de categoria, descrição, data e valor. Usa `flex: 1` na área de texto para empurrar o valor para a borda direita, e `numberOfLines={1}` para truncar descrições longas.
-
-> **Atividade prática:** O código completo de `CartaoSaldo`, `CardsResumo`, `ItemTransacao` e `theme.js` está no [conteúdo complementar](./STEPS.md).
-
----
-
-## Sombras no Android e iOS
-
-O React Native usa propriedades diferentes para sombra em cada plataforma:
-
-```jsx
-const styles = StyleSheet.create({
-  card: {
-    // Sombra no iOS:
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    // Sombra no Android:
-    elevation: 2,
-  },
-});
-```
-
-> `elevation` não existe no iOS; `shadowColor` e companhia não funcionam no Android. Use os dois blocos juntos para ter sombra em ambas as plataformas.
-
----
-
-## Operadores Úteis no React Native
-
-### Nullish Coalescing (`??`)
-
-```jsx
-const nomeIcone = ICONES[categoria] ?? 'ellipsis-horizontal-circle';
-// Retorna o lado direito apenas se o esquerdo for null ou undefined
-// (diferente do ||, que também ativa para '', 0 e false)
-```
-
-### Optional Chaining (`?.`)
-
-```jsx
-latitude: localizacao?.latitude ?? null
-// Acessa latitude apenas se localizacao não for null/undefined
-```
-
-### `numberOfLines`
-
-```jsx
-<Text numberOfLines={1}>{descricao}</Text>
-// Trunca o texto com "..." após 1 linha — evita quebrar o layout
-```
-
----
-
-## Calculando Totais com filter + reduce
-
-Padrão recorrente no app financeiro:
-
-```jsx
-const receitas = transacoes
-  .filter(t => t.tipo === 'receita')   // filtra apenas receitas
-  .reduce((acc, t) => acc + t.valor, 0); // soma os valores (começa em 0)
-
-const despesas = transacoes
-  .filter(t => t.tipo === 'despesa')
-  .reduce((acc, t) => acc + t.valor, 0);
-
-const saldo = receitas - despesas;
-```
-
-O `reduce` recebe dois parâmetros: a função acumuladora `(acc, item) => novoAcc` e o **valor inicial** (`0`). Sem o valor inicial, o reduce usaria o primeiro elemento como ponto de partida, o que quebraria se a lista estivesse vazia.
-
----
-
-## Ícones com @expo/vector-icons
-
-O Expo já inclui o `@expo/vector-icons` — não precisa instalar nada extra.
-
-### Famílias disponíveis
-
-| Biblioteca | Quando usar |
-|------------|-------------|
-| `Ionicons` | Interface geral — recomendada para iniciantes |
-| `MaterialIcons` | Estilo Google/Material Design |
-| `FontAwesome` | Ícones clássicos da web |
-| `Feather` | Ícones modernos e minimalistas |
-
-### Como usar
-
-```jsx
-import { Ionicons } from '@expo/vector-icons';
-import { MaterialIcons } from '@expo/vector-icons';
-
-// Básico:
-<Ionicons name="home" size={24} color="#333" />
-
-// Com estilo:
-<Ionicons name="add-circle" size={32} color="#2ecc71" style={{ marginRight: 8 }} />
-
-// Em um botão:
-<TouchableOpacity onPress={handleAdicionar}>
-  <Ionicons name="add" size={28} color="#fff" />
-</TouchableOpacity>
-```
-
-> **Dica:** Pesquise ícones disponíveis em [icons.expo.fyi](https://icons.expo.fyi)
-
----
-
-## React Native Paper
-
-O React Native Paper é uma biblioteca de componentes no estilo Material Design, pronta para uso em produção.
-
-### Instalação
+### Passo a passo
 
 ```bash
-npm install react-native-paper
+# 1. Biblioteca principal de navegação
+npm install @react-navigation/native
+
+# 2. Dependências de gestos e animações
+npx expo install react-native-screens react-native-safe-area-context
+
+# 3. Navigator de abas inferiores
+npm install @react-navigation/bottom-tabs
+
+# 4. Navigator de pilha (para o formulário)
+npm install @react-navigation/native-stack
 ```
 
-### Configuração
+> **Sobre o `react-native-safe-area-context`:** além de ser dependência do React Navigation, é dele que importaremos o `SafeAreaView` em todas as telas — o `SafeAreaView` do `react-native` está em vias de deprecação e só funciona corretamente no iOS. Para que o `SafeAreaView` funcione, o `App.js` precisa envolver tudo com `<SafeAreaProvider>`:
+>
+> ```jsx
+> import { SafeAreaProvider } from 'react-native-safe-area-context';
+>
+> export default function App() {
+>   return (
+>     <SafeAreaProvider>
+>       <NavigationContainer>{/* ... */}</NavigationContainer>
+>     </SafeAreaProvider>
+>   );
+> }
+> ```
+>
+> Nas telas, o uso fica:
+>
+> ```jsx
+> import { SafeAreaView } from 'react-native-safe-area-context';
+> ```
+
+### Configuração básica
+
+Todo app com React Navigation precisa de um `NavigationContainer` envolvendo tudo:
 
 ```jsx
-// App.js — envolva tudo com o PaperProvider:
-import { PaperProvider } from 'react-native-paper';
+// App.js
+import { NavigationContainer } from '@react-navigation/native';
 
 export default function App() {
   return (
-    <PaperProvider>
-      {/* resto do app */}
-    </PaperProvider>
+    <NavigationContainer>
+      {/* navegadores ficam aqui dentro */}
+    </NavigationContainer>
   );
 }
 ```
 
-### Componentes úteis para o minhas-financas
+---
+
+## Tab Navigator
+
+O Tab Navigator cria a barra de abas na parte inferior da tela.
+
+### Estrutura básica
 
 ```jsx
-import { Button, Chip, Card, Divider } from 'react-native-paper';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
 
-// Botão estilizado:
-<Button mode="contained" onPress={handleSalvar} icon="check">
-  Salvar Transação
-</Button>
+const Tab = createBottomTabNavigator();
 
-// Chips para categorias:
-<Chip icon="restaurant" onPress={() => setCategoria('alimentacao')}>
-  Alimentação
-</Chip>
+function TabRoutes() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: '#2ecc71',
+        tabBarInactiveTintColor: '#95a5a6',
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor: '#eee',
+          height: 60,
+          paddingBottom: 8,
+        },
+        tabBarIcon: ({ color, size }) => {
+          const icones = {
+            Dashboard: 'home',
+            'Nova Transação': 'add-circle',
+            Relatório: 'bar-chart',
+          };
+          return <Ionicons name={icones[route.name]} size={size} color={color} />;
+        },
+      })}
+    >
+      <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen name="Nova Transação" component={NovaTransacaoScreen} />
+      <Tab.Screen name="Relatório" component={RelatorioScreen} />
+    </Tab.Navigator>
+  );
+}
+```
 
-// Card com elevação:
-<Card style={{ margin: 16 }}>
-  <Card.Title title="Resumo do Mês" />
-  <Card.Content>
-    <Text>Receitas: R$ 3.200,00</Text>
-  </Card.Content>
-</Card>
+### `screenOptions` — personalizando aparência
+
+| Propriedade | O que faz |
+|-------------|-----------|
+| `headerShown: false` | Remove o cabeçalho automático |
+| `tabBarActiveTintColor` | Cor do ícone/texto da aba ativa |
+| `tabBarInactiveTintColor` | Cor das abas inativas |
+| `tabBarStyle` | Estilo da barra inteira |
+| `tabBarIcon` | Função que retorna o ícone |
+
+---
+
+## Stack Navigator
+
+O Stack Navigator empilha telas. Quando você navega para uma nova tela, ela aparece por cima com uma animação. O botão de voltar remove a tela do topo da pilha.
+
+```jsx
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+const Stack = createNativeStackNavigator();
+
+function DashboardStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen
+        name="DashboardMain"
+        component={DashboardScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="DetalhesTransacao"
+        component={DetalhesTransacaoScreen}
+        options={{
+          title: 'Detalhes',
+          headerStyle: { backgroundColor: '#2c3e50' },
+          headerTintColor: '#fff',
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
 ```
 
 ---
 
-## Imagens no React Native
+## Drawer Navigator
 
-```jsx
-import { Image } from 'react-native';
+O Drawer Navigator cria um menu deslizante (gaveta) que abre a partir da lateral da tela — o padrão "hamburguer" usado em apps como Gmail e Google Maps.
 
-// Imagem local (dentro do projeto):
-<Image
-  source={require('./assets/logo.png')}
-  style={{ width: 120, height: 60 }}
-  resizeMode="contain"
-/>
+### Instalação
 
-// Imagem remota (URL):
-<Image
-  source={{ uri: 'https://exemplo.com/imagem.jpg' }}
-  style={{ width: 200, height: 200, borderRadius: 100 }}
-/>
+```bash
+npm install @react-navigation/drawer
+npx expo install react-native-gesture-handler react-native-reanimated
 ```
 
-| `resizeMode` | Comportamento |
-|--------------|---------------|
-| `cover` | Preenche sem distorcer (pode cortar) |
-| `contain` | Mostra inteiro sem cortar |
-| `stretch` | Estica para preencher (pode distorcer) |
-| `center` | Centraliza no tamanho original |
+> O `react-native-reanimated` exige que você adicione o plugin ao `babel.config.js`:
+
+```js
+// babel.config.js
+module.exports = function(api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+    plugins: ['react-native-reanimated/plugin'], // ← adicione esta linha
+  };
+};
+```
+
+Reinicie o servidor após alterar o `babel.config.js`: pressione `Ctrl+C` e execute `npx expo start` novamente.
+
+### Estrutura básica
+
+```jsx
+import { createDrawerNavigator } from '@react-navigation/drawer';
+import { Ionicons } from '@expo/vector-icons';
+
+const Drawer = createDrawerNavigator();
+
+function DrawerRoutes() {
+  return (
+    <Drawer.Navigator
+      screenOptions={{
+        drawerActiveTintColor: '#2c3e50',
+        drawerInactiveTintColor: '#95a5a6',
+        drawerStyle: { backgroundColor: '#f5f6fa', width: 260 },
+      }}
+    >
+      <Drawer.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={{
+          drawerIcon: ({ color }) => <Ionicons name="home" size={22} color={color} />,
+        }}
+      />
+      <Drawer.Screen
+        name="Relatório"
+        component={RelatorioScreen}
+        options={{
+          drawerIcon: ({ color }) => <Ionicons name="bar-chart" size={22} color={color} />,
+        }}
+      />
+      <Drawer.Screen
+        name="Configurações"
+        component={ConfiguracoesScreen}
+        options={{
+          drawerIcon: ({ color }) => <Ionicons name="settings" size={22} color={color} />,
+        }}
+      />
+    </Drawer.Navigator>
+  );
+}
+```
+
+### Abrindo e fechando a gaveta programaticamente
+
+```jsx
+function DashboardScreen({ navigation }) {
+  return (
+    <View>
+      {/* Abre a gaveta ao tocar no ícone hamburguer: */}
+      <TouchableOpacity onPress={() => navigation.openDrawer()}>
+        <Ionicons name="menu" size={28} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Também é possível fechar: */}
+      <TouchableOpacity onPress={() => navigation.closeDrawer()}>
+        <Text>Fechar menu</Text>
+      </TouchableOpacity>
+
+      {/* Ou alternar: */}
+      <TouchableOpacity onPress={() => navigation.toggleDrawer()}>
+        <Text>Alternar menu</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+```
+
+### Combinando Drawer + Tab
+
+O padrão mais comum em apps complexos é ter um Drawer na raiz e Tabs dentro de uma das telas:
+
+```
+Drawer.Navigator
+├── Tela Principal (Tab.Navigator)
+│   ├── Dashboard
+│   ├── Nova Transação
+│   └── Relatório
+└── Configurações
+```
+
+```jsx
+// App.js
+export default function App() {
+  return (
+    <NavigationContainer>
+      <DrawerRoutes />         {/* Drawer envolve tudo */}
+    </NavigationContainer>
+  );
+}
+
+// DrawerRoutes.js
+function DrawerRoutes() {
+  return (
+    <Drawer.Navigator>
+      <Drawer.Screen name="App" component={TabRoutes} />  {/* Tab dentro do Drawer */}
+      <Drawer.Screen name="Configurações" component={ConfiguracoesScreen} />
+    </Drawer.Navigator>
+  );
+}
+```
+
+| Quando usar Drawer | Quando usar Tab |
+|--------------------|-----------------|
+| Muitos itens de menu (5+) | Poucas telas principais (2–4) |
+| Itens raramente acessados | Itens acessados com frequência |
+| Apps estilo "painel de controle" | Apps estilo "redes sociais" |
+
+---
+
+## Navegando entre telas
+
+Todo componente de tela recebe automaticamente a prop `navigation`:
+
+```jsx
+function DashboardScreen({ navigation }) {
+  return (
+    <View>
+      <Button
+        title="Ver detalhes da transação"
+        onPress={() => navigation.navigate('DetalhesTransacao', {
+          id: '123',
+          descricao: 'Supermercado',
+          valor: 280.50,
+        })}
+      />
+      <Button title="Voltar" onPress={() => navigation.goBack()} />
+    </View>
+  );
+}
+```
+
+### Recebendo parâmetros na tela destino
+
+```jsx
+function DetalhesTransacaoScreen({ route }) {
+  // route.params contém o que foi passado no navigate()
+  const { id, descricao, valor } = route.params;
+
+  return (
+    <View>
+      <Text>{descricao}</Text>
+      <Text>R$ {valor.toFixed(2)}</Text>
+    </View>
+  );
+}
+```
+
+---
+
+## Formulário de Nova Transação
+
+A tela `NovaTransacaoScreen` precisa de campos de entrada de texto e seleção de categoria.
+
+### TextInput — campo de texto
+
+```jsx
+import { TextInput } from 'react-native';
+
+function NovaTransacaoScreen() {
+  const [descricao, setDescricao] = useState('');
+  const [valor, setValor] = useState('');
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.label}>Descrição</Text>
+      <TextInput
+        style={styles.input}
+        value={descricao}
+        onChangeText={setDescricao}
+        placeholder="Ex: Supermercado"
+        maxLength={50}
+      />
+
+      <Text style={styles.label}>Valor (R$)</Text>
+      <TextInput
+        style={styles.input}
+        value={valor}
+        onChangeText={setValor}
+        placeholder="0,00"
+        keyboardType="decimal-pad"  // abre teclado numérico
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 16,
+    backgroundColor: '#fff',
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 4,
+  },
+});
+```
+
+### Seleção de tipo (Receita / Despesa)
+
+```jsx
+function SeletorTipo({ tipo, onChange }) {
+  return (
+    <View style={styles.seletor}>
+      <TouchableOpacity
+        style={[styles.botaoTipo, tipo === 'receita' && styles.ativo_receita]}
+        onPress={() => onChange('receita')}
+      >
+        <Ionicons name="arrow-up" size={18} color={tipo === 'receita' ? '#fff' : '#555'} />
+        <Text style={[styles.textoTipo, tipo === 'receita' && { color: '#fff' }]}>Receita</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.botaoTipo, tipo === 'despesa' && styles.ativo_despesa]}
+        onPress={() => onChange('despesa')}
+      >
+        <Ionicons name="arrow-down" size={18} color={tipo === 'despesa' ? '#fff' : '#555'} />
+        <Text style={[styles.textoTipo, tipo === 'despesa' && { color: '#fff' }]}>Despesa</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+```
+
+---
+
+## Estrutura de Arquivos para Navegação
+
+Projetos com navegação devem organizar as telas em uma pasta separada:
+
+```
+minhas-financas/
+├── App.js                        # NavigationContainer + TabRoutes
+├── routes/
+│   └── TabRoutes.js              # Tab.Navigator com as 3 abas
+├── screens/
+│   ├── DashboardScreen.js        # Tela principal (Aula 2)
+│   ├── NovaTransacaoScreen.js    # Formulário de nova transação
+│   └── RelatorioScreen.js        # Resumo de receitas e despesas
+├── components/                   # Componentes reutilizáveis (Aula 2)
+├── theme.js
+└── package.json
+```
+
+---
+
+## Navegação Condicional
+
+Apps reais mostram telas diferentes dependendo do estado do usuário — por exemplo: mostrar a tela de login se o usuário não estiver autenticado, ou o app principal se estiver.
+
+### Conceito
+
+Navegação condicional é controlada por **estado** (não por rotas). O `NavigationContainer` renderiza navegadores diferentes conforme uma condição:
+
+```jsx
+// App.js
+import { useState } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+
+export default function App() {
+  const [autenticado, setAutenticado] = useState(false);
+
+  return (
+    <NavigationContainer>
+      {autenticado
+        ? <TabRoutes onLogout={() => setAutenticado(false)} />   // app principal
+        : <AuthStack onLogin={() => setAutenticado(true)} />     // telas de login
+      }
+    </NavigationContainer>
+  );
+}
+```
+
+### Stack de autenticação
+
+```jsx
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+const Stack = createNativeStackNavigator();
+
+function AuthStack({ onLogin }) {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Login">
+        {(props) => <LoginScreen {...props} onLogin={onLogin} />}
+      </Stack.Screen>
+      <Stack.Screen name="Cadastro" component={CadastroScreen} />
+      <Stack.Screen name="EsqueciSenha" component={EsqueciSenhaScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function LoginScreen({ navigation, onLogin }) {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
+      <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 32 }}>Entrar</Text>
+
+      <TouchableOpacity
+        style={{ backgroundColor: '#2c3e50', padding: 16, borderRadius: 8, alignItems: 'center' }}
+        onPress={onLogin}  // chama o callback — troca o navegador no App.js
+      >
+        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Acessar</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={{ marginTop: 16, alignItems: 'center' }}
+        onPress={() => navigation.navigate('Cadastro')}
+      >
+        <Text style={{ color: '#2c3e50' }}>Não tem conta? Cadastre-se</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+```
+
+### Persistindo o estado de autenticação
+
+Na prática, o estado `autenticado` precisa ser carregado do AsyncStorage ao abrir o app, para que o usuário não precise fazer login toda vez:
+
+```jsx
+import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export default function App() {
+  const [autenticado, setAutenticado] = useState(false);
+  const [verificando, setVerificando] = useState(true); // evita flash da tela errada
+
+  useEffect(() => {
+    async function verificarSessao() {
+      const token = await AsyncStorage.getItem('@app:token');
+      setAutenticado(!!token);
+      setVerificando(false);
+    }
+    verificarSessao();
+  }, []);
+
+  if (verificando) {
+    return <SplashScreen />; // mostra splash enquanto verifica
+  }
+
+  return (
+    <NavigationContainer>
+      {autenticado
+        ? <TabRoutes onLogout={async () => {
+            await AsyncStorage.removeItem('@app:token');
+            setAutenticado(false);
+          }}
+          />
+        : <AuthStack onLogin={async (token) => {
+            await AsyncStorage.setItem('@app:token', token);
+            setAutenticado(true);
+          }}
+          />
+      }
+    </NavigationContainer>
+  );
+}
+```
+
+> **Por que não usar `navigation.navigate('Login')` para fazer logout?** Porque as telas de login e do app principal são navegadores separados — não há como navegar entre eles. A troca é feita alterando o **estado** no `App.js`, e o React re-renderiza o navegador correto automaticamente.
+
+---
+
+## KeyboardAvoidingView — Teclado que Cobre Campos
+
+Em dispositivos iOS (e alguns Android), o teclado virtual pode cobrir campos de formulário. O `KeyboardAvoidingView` evita isso:
+
+```jsx
+import { KeyboardAvoidingView, Platform } from 'react-native';
+
+<KeyboardAvoidingView
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  style={{ flex: 1 }}
+>
+  <ScrollView keyboardShouldPersistTaps="handled">
+    <TextInput placeholder="Descrição" />
+    <TextInput placeholder="Valor" keyboardType="decimal-pad" />
+  </ScrollView>
+</KeyboardAvoidingView>
+```
+
+| `behavior` | Efeito | Recomendado para |
+|------------|--------|-----------------|
+| `'padding'` | Adiciona espaço abaixo do campo | iOS |
+| `'height'` | Reduz a altura do container | Android |
+| `'position'` | Reposiciona o container | Casos especiais |
+
+A prop `keyboardShouldPersistTaps="handled"` no `ScrollView` garante que tocar fora do teclado não desmonte os campos antes do `onPress` ser processado.
+
+---
+
+## Recebendo Dados via route.params com useEffect
+
+Ao usar `navigation.navigate('Dashboard', { novaTransacao })` para passar dados de volta, a tela destino precisa de um `useEffect` para reagir à mudança:
+
+```jsx
+function DashboardScreen({ navigation, route }) {
+  const [transacoes, setTransacoes] = useState(INICIAIS);
+
+  // Reage sempre que route.params?.novaTransacao mudar
+  useEffect(() => {
+    if (route.params?.novaTransacao) {
+      setTransacoes(prev => [route.params.novaTransacao, ...prev]);
+    }
+  }, [route.params?.novaTransacao]);
+  // ...
+}
+```
+
+> **Por que useEffect e não verificar direto no render?** Porque os parâmetros podem chegar depois da primeira renderização. O `useEffect` com a dependência correta garante que o código execute apenas quando o valor realmente mudar.
+
+---
+
+## Passando Callback entre Telas
+
+Na Aula 4 usaremos Context API, mas por enquanto podemos passar uma função de callback pelo `navigate`:
+
+```jsx
+// DashboardScreen — passa função para receber nova transação
+function DashboardScreen({ navigation }) {
+  const [transacoes, setTransacoes] = useState(TRANSACOES_INICIAIS);
+
+  const adicionarTransacao = (novaTransacao) => {
+    setTransacoes(prev => [novaTransacao, ...prev]);
+  };
+
+  return (
+    <View>
+      <Button
+        title="+ Nova"
+        onPress={() => navigation.navigate('Nova Transação', { onSalvar: adicionarTransacao })}
+      />
+      {/* lista de transacoes... */}
+    </View>
+  );
+}
+
+// NovaTransacaoScreen — chama o callback ao salvar
+function NovaTransacaoScreen({ route, navigation }) {
+  const { onSalvar } = route.params ?? {};
+
+  const salvar = () => {
+    const novaTransacao = { id: Date.now().toString(), descricao, valor: parseFloat(valor), tipo, categoria };
+    onSalvar?.(novaTransacao);   // chama o callback se existir
+    navigation.goBack();         // volta para o Dashboard
+  };
+
+  // ...
+}
+```
 
 ---
 
 ## Projeto Demo em Sala
 
-O diretório `minhas-financas/` (iniciado nesta aula e evoluído nas próximas) contém a tela principal do app com dados estáticos.
+> **Atividade prática:** O código completo de todas as telas (`DashboardScreen`, `NovaTransacaoScreen`, `RelatorioScreen`, `DetalheTransacaoScreen`, `BoasVindasScreen`) e dos navegadores (`TabRoutes`, `DashboardStack`) está no [conteúdo complementar](./STEPS.md).
 
 ### Como rodar
 
@@ -322,56 +679,42 @@ npx expo start
 
 ### O que o demo mostra
 
-| Seção | Conceito demonstrado |
-|-------|----------------------|
-| CartaoSaldo | Flexbox, StyleSheet, props, lógica condicional |
-| CardsResumo | `flexDirection: 'row'`, `flex: 1` em filhos |
-| Lista de transações | Componente ItemTransacao, `@expo/vector-icons`, ScrollView |
-| Categorias com ícones | Mapeamento de categoria → ícone Ionicons |
+| Aba/Tela | Conceito demonstrado |
+|----------|----------------------|
+| Barra inferior com ícones | Tab Navigator + `tabBarIcon` |
+| Dashboard → Nova Transação | `navigation.navigate()` com params |
+| Formulário com campos | `TextInput`, `useState`, validação básica |
+| Botão "Salvar" → volta | `navigation.goBack()` + callback |
+| Tela de Relatório | Cálculo de totais, exibição de dados |
 
 ### Estrutura do projeto demo
 
 ```
 minhas-financas/
-├── App.js                  # Tela principal montada
+├── App.js
+├── routes/
+│   └── TabRoutes.js
+├── screens/
+│   ├── DashboardScreen.js
+│   ├── NovaTransacaoScreen.js
+│   └── RelatorioScreen.js
 ├── components/
-│   ├── CartaoSaldo.js      # Card de saldo total
-│   ├── CardsResumo.js      # Cards de receitas e despesas
-│   └── ItemTransacao.js    # Item individual da lista
-├── theme.js                # Cores e espaçamentos globais
-├── app.json
-└── package.json
+│   ├── CartaoSaldo.js
+│   ├── CardsResumo.js
+│   └── ItemTransacao.js
+└── theme.js
 ```
 
 ---
-
----
-
-#### Prepare o Ambiente Local — Obrigatório para a Aula 4
-
-As **aulas 1, 2 e 3** podem ser feitas no [snack.expo.dev](https://snack.expo.dev). A partir da **Aula 4**, o Snack não é mais suficiente: SQLite, Geolocalização e Mapas exigem ambiente nativo instalado localmente.
-
-**Use o tempo desta aula para instalar o que falta:**
-
-| Item | Status |
-|---|---|
-| Node.js 20.x instalado | [ ] |
-| VS Code instalado | [ ] |
-| Expo CLI instalado (`npm install -g expo-cli`) | [ ] |
-| Android Studio instalado | [ ] |
-| AVD criado (Pixel 8 / Android 14) | [ ] |
-| Expo Go instalado no celular | [ ] |
-
-Siga o passo a passo completo em [aula1/README.md](../aula1/README.md#configurando-o-android-studio-avd-emulador).
-
-> **O Android Studio é o passo mais demorado** (download ~1 GB + configuração do AVD). Inicie a instalação enquanto acompanha a aula.
 
 ---
 
 
 ## Referências
 
-- [Documentação oficial do StyleSheet](https://reactnative.dev/docs/stylesheet)
-- [Guia de Flexbox — React Native](https://reactnative.dev/docs/flexbox)
-- [Buscador de ícones — icons.expo.fyi](https://icons.expo.fyi)
-- [React Native Paper — componentes](https://callstack.github.io/react-native-paper/docs/components/)
+- [React Navigation — documentação oficial](https://reactnavigation.org/docs/getting-started)
+- [Bottom Tab Navigator](https://reactnavigation.org/docs/bottom-tab-navigator)
+- [Native Stack Navigator](https://reactnavigation.org/docs/native-stack-navigator)
+- [Drawer Navigator](https://reactnavigation.org/docs/drawer-navigator)
+- [Passagem de parâmetros](https://reactnavigation.org/docs/params)
+- [Autenticação com React Navigation](https://reactnavigation.org/docs/auth-flow)
