@@ -29,6 +29,7 @@ export function TabRoutes() {
           height: 60,
           paddingBottom: 8,
           paddingTop: 4,
+          // marginBottom: 35,
         },
         tabBarIcon: ({ focused, color, size }) => {
           const { ativa, inativa } = ICONES_TAB[route.name];
