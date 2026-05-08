@@ -15,12 +15,11 @@ const ICONES = {
   outros: 'ellipsis-horizontal-circle',
 };
 
-export function ItemTransacao({ descricao, valor, categoria, tipo, data, onPress }) {
-  const isReceita = tipo === 'receita';
+export function ItemTransacao({ descricao, valor, categoria, tipo, data, onPress, onLongPress }) {  const isReceita = tipo === 'receita';
   const nomeIcone = ICONES[categoria] ?? 'ellipsis-horizontal-circle';
 
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.7}>
+<TouchableOpacity style={styles.container} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.7}>
       {/* Ícone da categoria */}
       <View style={[
         styles.iconeContainer,
