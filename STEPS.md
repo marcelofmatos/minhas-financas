@@ -32,6 +32,36 @@ Ao final deste tutorial, o app terá:
 
 ---
 
+## Onde o SQLite aparece em apps reais
+
+O SQLite é o banco de dados mais usado no mundo — está dentro de **todo iPhone, todo Android, todos os principais navegadores e na maioria dos apps móveis**. Ver exemplos do dia a dia ajuda a entender que o que você está aprendendo aqui é exatamente o mesmo padrão usado por apps de milhões de usuários.
+
+### Padrões comuns de uso em apps móveis
+
+| Padrão | Exemplo prático | Por que SQLite |
+|---|---|---|
+| **Histórico de mensagens** | WhatsApp, Telegram, Signal armazenam todas as conversas localmente | Volume alto, busca rápida por contato/data |
+| **Cache offline de dados do servidor** | Instagram e Twitter mostram o feed mesmo sem rede | Permite filtrar e ordenar sem nova requisição |
+| **Conteúdo baixado para offline** | Spotify, YouTube Music, Netflix gerenciam o que está disponível sem internet | Relaciona arquivos, metadados, expiração |
+| **Histórico de atividade** | Strava, Nike Run, Apple Saúde guardam treinos, rotas, métricas | Consultas por período, agregações (`SUM`, `AVG`) |
+| **Notas e produtividade** | Apple Notes, Google Keep, Notion guardam textos e metadados | Busca por título, tags, data |
+| **Histórico do navegador** | Chrome, Safari, Firefox usam SQLite para histórico, favoritos e cookies | Milhões de registros com busca instantânea |
+| **Carrinho e lista de desejos** | Shopee, Amazon, Mercado Livre lembram itens entre sessões | Dados estruturados que sobrevivem ao logout |
+| **Fila de sincronização** | Apps offline-first guardam ações para enviar quando voltar a internet | Marca registros como "pendente" via coluna de status |
+| **Saves de jogos** | A maioria dos jogos mobile guarda progresso, conquistas e configurações | Robusto, transacional, sem servidor |
+
+### Por que tantos apps escolhem SQLite
+
+- **Está embutido no sistema operacional** — Android e iOS já incluem o SQLite, então não há dependência extra para o usuário baixar
+- **Funciona offline por padrão** — não precisa de servidor, ideal para apps que precisam continuar usáveis sem rede
+- **Lida com volume real** — milhares ou milhões de registros sem perder performance, desde que existam índices apropriados
+- **Suporta consultas complexas** — `WHERE`, `JOIN`, `GROUP BY`, `SUM` resolvem no banco o que seria caro em JavaScript
+- **Padrão SQL universal** — o que você aprende aqui vale para PostgreSQL, MySQL, SQL Server e qualquer banco relacional
+
+> **Onde o `minhas-financas` se encaixa nisso?** O app combina dois padrões clássicos: **histórico de atividade** (a tabela `transacoes` cresce com o tempo) e **agregações** (somar receitas e despesas). Esse é o cenário típico em que SQLite brilha — exatamente o mesmo desenho usado por apps de fitness, bancos digitais e ferramentas de produtividade.
+
+---
+
 ## Antes de Começar — Checklist
 
 - [ ] Projeto `minhas-financas` das Aulas 2, 3 e 4 funcionando
@@ -151,6 +181,7 @@ export function excluirTransacao(id) {
 | `SELECT * FROM ... ORDER BY rowid DESC` | Busca tudo, mais recentes primeiro |
 | `INSERT INTO ... VALUES (?, ?, ...)` | Os `?` são substituídos pelos valores do array |
 | `DELETE FROM ... WHERE id = ?` | Remove apenas a linha com aquele id |
+| `UPDATE ... SET coluna = ? WHERE id = ?` | Modifica colunas de uma linha existente (ver **Referência Rápida — R1**) |
 
 ---
 
@@ -627,6 +658,124 @@ const styles = StyleSheet.create({
 5. Repita e toque em **Excluir** no Alert → volta ao Dashboard, transação sumiu da lista ✅
 6. Feche e reabra o app → a transação excluída continua sumida (persistência confirmada) ✅
 7. Confirme que o **toque longo** na lista do Dashboard ainda funciona como atalho
+
+---
+
+## Referência Rápida — Para Aprofundar
+
+> Esta seção é **só para consulta**. Não é necessária para concluir o app — serve como guia de estudo para reforçar os conceitos de banco usados na aula. Use-a no seu ritmo.
+
+### R1 — UPDATE: modificar registros existentes
+
+A aula usa `INSERT`, `SELECT` e `DELETE`. O quarto comando essencial é o `UPDATE`, que altera colunas de uma linha que **já existe** no banco.
+
+```sql
+UPDATE transacoes
+SET valor = ?, descricao = ?
+WHERE id = ?;
+```
+
+Exemplo de função em JavaScript (referência — não precisa adicionar ao projeto agora):
+
+```jsx
+// Atualiza uma transação existente pelo id
+export function atualizarTransacao(t) {
+  db.runSync(
+    'UPDATE transacoes SET descricao = ?, valor = ?, tipo = ?, categoria = ?, data = ? WHERE id = ?',
+    [t.descricao, t.valor, t.tipo, t.categoria, t.data, t.id]
+  );
+}
+```
+
+> ⚠️ **Cuidado com `UPDATE` sem `WHERE`.** O comando `UPDATE transacoes SET valor = 0` (sem `WHERE`) zera **todas as linhas** da tabela. O `WHERE` é o que torna a operação cirúrgica. A mesma regra vale para `DELETE`.
+
+---
+
+### R2 — Por que usar `?` em vez de juntar strings (SQL injection)
+
+Repare que todas as funções do banco usam `?` como marcador para os valores, e os valores entram em um array separado:
+
+```jsx
+// ✅ Forma correta — usa ? e passa os valores em um array
+db.runSync(
+  'INSERT INTO transacoes (id, descricao) VALUES (?, ?)',
+  [t.id, t.descricao]
+);
+```
+
+O que aconteceria se você juntasse a string assim?
+
+```jsx
+// ❌ NUNCA faça isso — vulnerável a SQL injection
+db.runSync(
+  `INSERT INTO transacoes (id, descricao) VALUES ('${t.id}', '${t.descricao}')`
+);
+```
+
+Se o usuário digitasse na descrição algo como `'); DROP TABLE transacoes; --`, a string final viraria um comando que **apaga a tabela inteira**. Com `?`, o SQLite trata o texto sempre como **dado**, nunca como comando.
+
+Mesmo num app local, sempre use `?`:
+
+- Evita problemas com aspas e apóstrofes (ex.: descrição "Pão d'água" quebraria a string)
+- O banco escapa os valores corretamente para você
+- É o padrão profissional — você cria o hábito certo desde o primeiro dia
+
+---
+
+### R3 — Constraints: regras que o banco garante
+
+No `CREATE TABLE` do Passo 2 já vimos `PRIMARY KEY` e `NOT NULL`. Existem outras restrições úteis:
+
+| Constraint | O que faz | Exemplo |
+|---|---|---|
+| `PRIMARY KEY` | Identifica unicamente cada linha; não pode ser nula nem repetir | `id TEXT PRIMARY KEY` |
+| `NOT NULL` | A coluna não aceita o valor `NULL` (vazio) | `valor REAL NOT NULL` |
+| `DEFAULT` | Valor automático quando o INSERT não informa a coluna | `categoria TEXT DEFAULT 'Outros'` |
+| `UNIQUE` | Não permite duas linhas com o mesmo valor nessa coluna | `email TEXT UNIQUE` |
+| `CHECK` | Só aceita valores que satisfaçam a condição entre parênteses | `valor REAL CHECK (valor > 0)` |
+
+Versão mais protegida da tabela `transacoes` (apenas para estudo):
+
+```sql
+CREATE TABLE IF NOT EXISTS transacoes (
+  id        TEXT PRIMARY KEY,
+  descricao TEXT NOT NULL,
+  valor     REAL NOT NULL CHECK (valor > 0),
+  tipo      TEXT NOT NULL CHECK (tipo IN ('receita', 'despesa')),
+  categoria TEXT NOT NULL DEFAULT 'Outros',
+  data      TEXT NOT NULL
+);
+```
+
+> **Por que isso importa?** Se algum INSERT violar uma constraint, o banco rejeita a operação e lança um erro. Constraints transformam regras de negócio em garantias do banco — mesmo que o programador esqueça de validar no JavaScript, o banco não deixa o dado inconsistente entrar.
+
+---
+
+### R4 — DB Browser for SQLite: ferramenta de manutenção do banco
+
+O **DB Browser for SQLite** é um programa gratuito que abre arquivos `.db` e mostra as tabelas como uma planilha. É a ferramenta padrão para **manutenção e inspeção** de bancos SQLite — tanto em desenvolvimento quanto em produção:
+
+- Conferir o `CREATE TABLE` e os tipos de cada coluna
+- Visualizar todas as linhas de uma tabela como planilha
+- Executar `SELECT`, `UPDATE`, `INSERT` e `DELETE` manualmente, sem precisar mexer no código do app
+- Importar/exportar dados em CSV ou SQL
+- Corrigir registros, ajustar valores, popular o banco com dados de teste
+
+#### Instalação
+
+| Sistema | Como instalar |
+|---|---|
+| Windows | Baixe o `.exe` em [sqlitebrowser.org](https://sqlitebrowser.org) |
+| macOS | `brew install --cask db-browser-for-sqlite` ou baixe pelo site |
+| Linux (Ubuntu/Debian) | `sudo apt install sqlitebrowser` |
+
+#### Principais abas
+
+- **Database Structure** — mostra o `CREATE TABLE` que gerou cada tabela
+- **Browse Data** — todas as linhas da tabela como planilha; permite editar diretamente
+- **Execute SQL** — roda qualquer comando SQL manualmente para testar consultas
+
+> 💡 Você pode criar um banco `.db` local no seu computador, brincar com `CREATE TABLE`, `INSERT` e `SELECT` no DB Browser e depois reaproveitar as queries no código do app — uma forma rápida de praticar SQL sem rodar o app a cada teste.
 
 ---
 
