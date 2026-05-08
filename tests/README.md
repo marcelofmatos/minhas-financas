@@ -1,4 +1,4 @@
-# Simulação de Testes — Passo 8.1
+# Simulação de Testes — Passo 8.1, Aula 4
 
 Este documento descreve a suíte de testes E2E criada para o passo 8.1 do `STEPS.md` e mostra como **simular bugs** para ver os testes pegando regressões — material didático para a Aula 4.
 
