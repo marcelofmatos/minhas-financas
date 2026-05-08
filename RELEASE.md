@@ -1,9 +1,9 @@
 # RELEASE.md — Versionamento Semântico (SemVer)
 
-**Módulo 06 — Aula 03**
+**Módulo 06 — Aula 04**
 Prof. Marcelo Matos
 
-> Este arquivo é um **guia prático** para os alunos sobre como versionar projetos no GitHub usando **Semantic Versioning (SemVer)**, com o exemplo real da release **`1.2.0`** deste repositório — a evolução natural a partir da `1.1.0` publicada na Aula 02.
+> Este arquivo é um **guia prático** para os alunos sobre como versionar projetos no GitHub usando **Semantic Versioning (SemVer)**, com o exemplo real da release **`1.3.0`** deste repositório — a evolução natural a partir da `1.2.0` publicada na Aula 03.
 
 ---
 
@@ -26,21 +26,22 @@ MAJOR.MINOR.PATCH
 | **PATCH** (`0.0.X`) | **Corrigir um bug** sem alterar comportamento |
 
 > **Regra de ouro:** quando incrementa um número à esquerda, os da direita **zeram**.
-> Ex.: `1.1.4` → ganhou nova feature → vira `1.2.0` (não `1.2.4`).
+> Ex.: `1.2.4` → ganhou nova feature → vira `1.3.0` (não `1.3.4`).
 
 ---
 
-## Por que esta release é uma `1.2.0` (MINOR)?
+## Por que esta release é uma `1.3.0` (MINOR)?
 
-A Aula 03 **adicionou funcionalidades** ao projeto sem quebrar a interface do usuário entregue na `1.1.0`:
+A Aula 04 **adicionou funcionalidades** ao projeto sem quebrar a estrutura entregue na `1.2.0`:
 
-- O saldo, os cards de resumo e a lista de transações continuam visíveis na nova tela `Dashboard` ✅
-- Os componentes da Aula 02 (`CartaoSaldo`, `CardsResumo`, `ItemTransacao`) foram **reaproveitados**, não substituídos ✅
-- Quem clonou na `1.1.0` consegue dar `git pull` na `1.2.0` e rodar `npm install` para ter a navegação ✅
+- A navegação por abas continua funcionando ✅
+- As telas (`Dashboard`, `NovaTransacao`, `Relatorio`, `Sobre`) continuam acessíveis ✅
+- Os componentes da Aula 02 (`CartaoSaldo`, `CardsResumo`, `ItemTransacao`) seguem em uso ✅
+- Quem clonou na `1.2.0` consegue dar `git pull` na `1.3.0` e rodar `npm install` para ter persistência e cotações ✅
 
-Como **adicionamos features compatíveis** (várias telas + navegação), incrementamos o **MINOR** (`1.1.0` → `1.2.0`) e zeramos o PATCH.
+Como **adicionamos features compatíveis** (estado global, persistência, cotações, drawer e testes), incrementamos o **MINOR** (`1.2.0` → `1.3.0`) e zeramos o PATCH.
 
-> **Observação didática:** removemos a dependência `react-native-paper` (que não estava sendo usada de fato) e adicionamos as bibliotecas do React Navigation. Como **o comportamento visível ao usuário não quebra** e a documentação foi atualizada, mantemos como MINOR. Em projetos com API pública consumida por terceiros, trocar dependências assim seria candidato a MAJOR.
+> **Observação didática:** removemos a `BoasVindasScreen` (que era um onboarding apenas em memória, não persistido). Como ela não era uma API consumida por terceiros e a UX principal continua intacta, mantemos como MINOR. Em projetos com fluxo de onboarding crítico, remover uma tela poderia ser candidato a MAJOR.
 
 ---
 
@@ -50,9 +51,10 @@ Como **adicionamos features compatíveis** (várias telas + navegação), increm
 | ------- | ---- | ------------------------------------------------------------------ | ----- |
 | `1.0.0` | 01   | Primeira versão pública: cabeçalho + contador interativo           | —     |
 | `1.1.0` | 02   | Tela principal: saldo, cards de resumo e lista de transações       | MINOR |
-| `1.2.0` | **03** | **Navegação: Bottom Tabs + Stack, 6 telas e onboarding**         | **MINOR** |
-| `1.2.1` | (futuro) | Correção de tab bar cortando ícones em iPhone com notch        | PATCH |
-| `1.3.0` | 04   | Persistência local com `AsyncStorage`                              | MINOR |
+| `1.2.0` | 03   | Navegação: Bottom Tabs + Stack, 6 telas e onboarding               | MINOR |
+| `1.3.0` | **04** | **Context API + AsyncStorage, cotações, Drawer e testes E2E**    | **MINOR** |
+| `1.3.1` | (futuro) | Correção de race condition ao salvar transações no AsyncStorage | PATCH |
+| `1.4.0` | 05   | Gráficos e relatórios visuais                                      | MINOR |
 | `2.0.0` | (futuro) | Migração para Expo SDK 55 (mudanças incompatíveis)            | MAJOR |
 
 > **Antes da 1.0.0:** versões `0.x.y` indicam projeto em **desenvolvimento inicial**. A `1.0.0` sinaliza *"pronto para uso público"* — e é a partir dela que as regras de SemVer passam a valer com rigor.
@@ -64,8 +66,8 @@ Como **adicionamos features compatíveis** (várias telas + navegação), increm
 ### 1. Criar a tag local e fazer push
 
 ```bash
-git tag -a 1.2.0 -m "Aula 03 — Navegação com React Navigation"
-git push origin 1.2.0
+git tag -a 1.3.0 -m "Aula 04 — Context API, AsyncStorage, cotações e testes"
+git push origin 1.3.0
 ```
 
 > A **tag** é um marcador permanente no commit. Diferente de uma branch, ela não se move.
@@ -73,81 +75,100 @@ git push origin 1.2.0
 ### 2. Publicar a release
 
 1. No GitHub, vá em **Releases** → **Draft a new release**
-2. Em **Tag**, selecione `1.2.0`
-3. Em **Target**, escolha `main` (ou `aula3`, conforme a estratégia da turma)
-4. Em **Release title**, digite `1.2.0`
-5. Em **Previous tag**, selecione `1.1.0` (para gerar o changelog automático com os commits desta aula)
+2. Em **Tag**, selecione `1.3.0`
+3. Em **Target**, escolha `main` (ou `aula4`, conforme a estratégia da turma)
+4. Em **Release title**, digite `1.3.0`
+5. Em **Previous tag**, selecione `1.2.0` (para gerar o changelog automático com os commits desta aula)
 6. Em **Release notes**, cole o conteúdo da próxima seção 👇
 7. Clique em **Publish release**
 
 ---
 
-## Conteúdo para colar nas Release notes (v1.2.0)
+## Conteúdo para colar nas Release notes (v1.3.0)
 
 > Copie tudo o que está dentro do bloco abaixo e cole no campo **Release notes** do GitHub.
 
 ````markdown
-## 🚀 1.2.0 — Aula 03: Navegação entre telas com React Navigation
+## 🚀 1.3.0 — Aula 04: Estado global, persistência local e cotações em tempo real
 
-Terceira release do projeto **minhas-financas**, marcando o fim da Aula 03 do Módulo 06. Esta versão transforma o app de uma única tela em um **aplicativo multi-tela com navegação por abas e pilha**, usando o React Navigation.
+Quarta release do projeto **minhas-financas**, marcando o fim da Aula 04 do Módulo 06. Esta versão evolui o app de uma lista estática para uma aplicação com **estado global**, **persistência local** entre execuções, **cotações de moedas em tempo real** e **suíte de testes automatizados**.
 
 ### ✨ Novas funcionalidades
-- **Tela de boas-vindas** (`BoasVindasScreen`) exibida apenas no primeiro acesso, controlada por estado em `App.js`
-- **Navegação por abas inferiores** (Bottom Tabs) com 4 áreas: Dashboard, Nova Transação, Relatório e Sobre
-- **Navegação em pilha** (Stack) dentro do Dashboard, permitindo abrir o **detalhe de uma transação** ao tocar nela
-- **Tela de cadastro de nova transação** (`NovaTransacaoScreen`) — placeholder pronto para a Aula 04
-- **Tela de relatório** (`RelatorioScreen`) — placeholder para gráficos e totais
-- **Tela "Sobre"** (`SobreScreen`) com informações do projeto e do curso
-- **Ícones de aba dinâmicos** (Ionicons) que mudam entre estado ativo/inativo conforme a aba selecionada
+- **Estado global de transações** (`TransacoesContext`) — qualquer tela pode ler, adicionar ou remover transações
+- **Persistência local com `AsyncStorage`** — as transações cadastradas continuam disponíveis após fechar e reabrir o app
+- **Cadastro real de transações** na `NovaTransacaoScreen` — não é mais um placeholder; o formulário grava no contexto e persiste
+- **Remover transação por toque longo** (`onLongPress` em `ItemTransacao`) na lista do Dashboard
+- **Card de cotações de moedas** (`CartaoCotacoes`) consumindo API externa via hook `useCotacoes`
+- **Navegação por Drawer** (gaveta lateral) envolvendo as Tabs, expandindo as opções de navegação
+- **Suíte de testes E2E** com Jest + Puppeteer rodando contra a versão web do app, com relatórios em HTML
 
 ### 📚 Conceitos demonstrados
-- **React Navigation v7**: instalação, `NavigationContainer`, `createBottomTabNavigator` e `createNativeStackNavigator`
-- **Navegadores aninhados**: um Stack dentro de uma Tab (Dashboard contém DashboardHome → DetalheTransacao)
-- **`navigation.navigate('Tela', params)`** para mudar de tela e enviar parâmetros
-- **`route.params`** para receber dados na tela de destino
-- **`navigation.goBack()`** para voltar à tela anterior
-- **`screenOptions`** para customizar headers, cores e estilos do tab bar
-- **`SafeAreaProvider`** + `SafeAreaView` para respeitar áreas seguras (notch, status bar)
-- **Estado de onboarding** em `App.js` com `useState` para mostrar `BoasVindasScreen` apenas uma vez por sessão
-- **Organização em pastas**: separação clara entre `screens/` e `routes/`
+- **Context API**: `createContext`, `Provider`, `useContext` e como compartilhar estado sem prop drilling
+- **`useEffect`** para carregar dados do `AsyncStorage` na inicialização e gravar a cada mudança
+- **Custom Hooks**: criação do `useCotacoes` encapsulando `fetch` + `useState` + `useEffect`
+- **`AsyncStorage`** (`@react-native-async-storage/async-storage`): `getItem`, `setItem`, serialização com `JSON.stringify`/`JSON.parse`
+- **Consumo de API REST** com `fetch` e tratamento de loading/erro
+- **`TouchableOpacity` com `onLongPress`** para gestos diferenciados de toque comum
+- **Composição de Provider** envolvendo o navegador raiz para tornar o contexto disponível em todas as telas
+- **Navegadores aninhados em três níveis**: Drawer → Tabs → Stack
+- **Testes automatizados de UI** com Puppeteer simulando interações reais no navegador
 
 ### 🧩 Novos arquivos
-- `routes/TabRoutes.js` — navegador de abas inferiores (Bottom Tabs)
-- `routes/DashboardStack.js` — navegador em pilha dentro da aba Dashboard
-- `screens/BoasVindasScreen.js` — tela de onboarding do primeiro acesso
-- `screens/DashboardScreen.js` — tela principal (saldo + resumo + transações)
-- `screens/DetalheTransacaoScreen.js` — detalhes de uma transação selecionada
-- `screens/NovaTransacaoScreen.js` — formulário de cadastro (placeholder)
-- `screens/RelatorioScreen.js` — relatórios (placeholder)
-- `screens/SobreScreen.js` — informações do app e do curso
+- `context/TransacoesContext.js` — Provider e hook customizado para o estado global de transações
+- `hooks/useCotacoes.js` — hook para buscar e atualizar cotações de moedas
+- `components/CartaoCotacoes.js` — card visual exibindo as cotações
+- `routes/DrawerRoutes.js` — navegador Drawer envolvendo as Tabs
+- `tests/jest.config.js` — configuração do Jest com reporter HTML
+- `tests/helpers.js` — utilitários compartilhados pelos testes (setup do Puppeteer, seletores)
+- `tests/passo-8.1.test.js` — primeiro teste de fluxo (cadastro de transação)
+- `tests/README.md` — instruções de como rodar a suíte de testes
 
 ### ♻️ Mudanças no que já existia
-- `App.js` foi **enxugado**: deixou de montar a UI diretamente e agora apenas decide entre `BoasVindasScreen` ou `NavigationContainer + TabRoutes`
-- O conteúdo antigo do `App.js` foi movido para `screens/DashboardScreen.js`, mantendo o reuso dos componentes da Aula 02
-- `app.json` atualizado com `name` e `slug` corretos para `minhas-financas`
-- `index.js` ajustado (remoção de import desnecessário)
+- `App.js` agora encapsula `TabRoutes` com `TransacoesProvider`, removendo a `BoasVindasScreen` e o estado de primeiro acesso
+- `DashboardScreen` lê transações do contexto em vez do array local; recebe `onLongPress` em cada item para excluir
+- `NovaTransacaoScreen` virou um formulário funcional que chama `adicionarTransacao` do contexto
+- `RelatorioScreen` passou a calcular receitas/despesas a partir do contexto compartilhado
+- `ItemTransacao` ganhou suporte a `onLongPress` (mantendo compatibilidade com o `onPress` existente)
+- `TabRoutes` ajustado para integrar com o novo `DrawerRoutes`
+
+### ➖ Removido
+- `BoasVindasScreen` — onboarding inicial substituído por carregamento direto do app
 
 ### 📦 Novas dependências
-- `@react-navigation/native` — núcleo do React Navigation
-- `@react-navigation/bottom-tabs` — navegador de abas inferiores
-- `@react-navigation/native-stack` — navegador em pilha (versão nativa, mais performática)
-- `react-native-safe-area-context` — gerenciamento de áreas seguras
-- `react-native-screens` — otimização nativa das telas
-
-### ➖ Dependências removidas
-- `react-native-paper` — não estava sendo usado pelo código da Aula 02; removido para reduzir o tamanho do bundle
+- `@react-native-async-storage/async-storage` — armazenamento chave-valor assíncrono
+- **Em `tests/package.json`** (devDependencies dedicadas para testes):
+  - `jest` — framework de testes
+  - `puppeteer` — automação de navegador
+  - `jest-html-reporters` — geração de relatórios HTML
 
 ### 🛠️ Stack
 - Expo SDK `~54.0.33`
 - React `19.1.0`
 - React Native `0.81.5`
-- React Navigation `^7.x`
+- React Navigation `^7.x` (Native + Bottom Tabs + Native Stack + Drawer)
+- AsyncStorage `2.2.0`
+- Jest + Puppeteer (testes)
+
+### 🧪 Como rodar os testes
+
+```bash
+# Em um terminal, inicie a versão web do app
+npx expo start --web
+
+# Em outro terminal
+cd tests
+npm install
+npm test
+```
+
+Os relatórios HTML são gerados em `tests/reports/`.
 
 ### 📖 Documentação
 - [`README.md`](./README.md) — teoria da aula
-- [`STEPS.md`](./STEPS.md) — tutorial passo a passo da Aula 03
+- [`STEPS.md`](./STEPS.md) — tutorial passo a passo da Aula 04
+- [`tests/README.md`](./tests/README.md) — como executar os testes E2E
 
-**Full Changelog**: https://github.com/marcelofmatos/minhas-financas/compare/1.1.0...1.2.0
+**Full Changelog**: https://github.com/marcelofmatos/minhas-financas/compare/1.2.0...1.3.0
 ````
 
 ---
@@ -155,13 +176,13 @@ Terceira release do projeto **minhas-financas**, marcando o fim da Aula 03 do M�
 ## Resumo visual — quando subir cada número
 
 ```
-1.1.0 ──┬── corrigi bug ──────────► 1.1.1  (PATCH)
+1.2.0 ──┬── corrigi bug ──────────► 1.2.1  (PATCH)
         │
-        ├── adicionei feature ────► 1.2.0  ◄── ESTAMOS AQUI (Aula 03)
+        ├── adicionei feature ────► 1.3.0  ◄── ESTAMOS AQUI (Aula 04)
         │                            │
-        │                            ├── corrigi bug ──► 1.2.1  (PATCH)
+        │                            ├── corrigi bug ──► 1.3.1  (PATCH)
         │                            │
-        │                            └── nova feature ──► 1.3.0  (MINOR — Aula 04)
+        │                            └── nova feature ──► 1.4.0  (MINOR — Aula 05)
         │
         └── compatibilidade mudou ─────────────────────► 2.0.0  (MAJOR)
 ```
@@ -174,3 +195,5 @@ Terceira release do projeto **minhas-financas**, marcando o fim da Aula 03 do M�
 - [Documentação do GitHub Releases](https://docs.github.com/pt/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
 - [Convenção de mensagens de commit](https://www.conventionalcommits.org/pt-br/)
 - [React Navigation — documentação oficial](https://reactnavigation.org/)
+- [AsyncStorage — documentação oficial](https://react-native-async-storage.github.io/async-storage/)
+- [Jest](https://jestjs.io/) · [Puppeteer](https://pptr.dev/)
