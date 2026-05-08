@@ -1,239 +1,105 @@
-import { useState } from 'react';
+// App.js
+import { StatusBar } from 'expo-status-bar';
+import { ScrollView, View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { PaperProvider } from 'react-native-paper';
+import { CartaoSaldo } from './components/CartaoSaldo';
+import { CardsResumo } from './components/CardsResumo';
+import { ItemTransacao } from './components/ItemTransacao';
+import { cores, espacamento } from './theme';
 
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-
+// Dados estáticos para demonstração (na Aula 4, virão do AsyncStorage)
+const TRANSACOES = [
+  { id: '1', descricao: 'Salário', valor: 3200, tipo: 'receita', categoria: 'salario', data: '01/04/2026' },
+  { id: '2', descricao: 'Aluguel', valor: 900, tipo: 'despesa', categoria: 'moradia', data: '05/04/2026' },
+  { id: '3', descricao: 'Supermercado', valor: 280.50, tipo: 'despesa', categoria: 'alimentacao', data: '07/04/2026' },
+  { id: '4', descricao: 'Freelance', valor: 500, tipo: 'receita', categoria: 'salario', data: '10/04/2026' },
+  { id: '5', descricao: 'Uber', valor: 35.90, tipo: 'despesa', categoria: 'transporte', data: '11/04/2026' },
+  { id: '6', descricao: 'Academia', valor: 89.90, tipo: 'despesa', categoria: 'saude', data: '12/04/2026' },
+];
 
 export default function App() {
+  // Calcula receitas, despesas e saldo
+  const receitas = TRANSACOES
+    .filter(t => t.tipo === 'receita')
+    .reduce((acc, t) => acc + t.valor, 0);
 
-  // useState — IDÊNTICO ao React.js ⚛️
+  const despesas = TRANSACOES
+    .filter(t => t.tipo === 'despesa')
+    .reduce((acc, t) => acc + t.valor, 0);
 
-  const [contador, setContador] = useState(0);
-
+  const saldo = receitas - despesas;
 
   return (
+    <PaperProvider>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="light" />
 
-    <View style={styles.container}>
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* Cabeçalho */}
+          <View style={styles.cabecalho}>
+            <Text style={styles.tituloCabecalho}>Minhas Finanças</Text>
+            <Text style={styles.subtituloCabecalho}>Abril 2026</Text>
+          </View>
 
+          {/* Card de saldo */}
+          <CartaoSaldo saldo={saldo} mes="Abril" />
 
-      {/* Cabeçalho */}
+          {/* Cards de resumo */}
+          <CardsResumo receitas={receitas} despesas={despesas} />
 
-      <Text style={styles.titulo}>Olá, ITEAM! 🚀</Text>
-
-      <Text style={styles.subtitulo}>Módulo 06 — Aula 01</Text>
-
-
-      {/* Card do contador */}
-
-      <View style={styles.card}>
-
-        <Text style={styles.cardTitulo}>⚛️ useState — igual ao React.js</Text>
-
-
-        {/* Número atual do contador */}
-
-        <Text style={styles.contador}>{contador}</Text>
-
-
-        {/* Linha de botões */}
-
-        <View style={styles.botoes}>
-
-
-          {/* Botão − (diminuir) */}
-
-          <TouchableOpacity
-
-            style={[styles.botao, styles.botaoCinza]}
-
-            onPress={() => setContador(contador - 1)}
-
-          >
-
-            <Text style={styles.botaoTexto}>−</Text>
-
-          </TouchableOpacity>
-
-
-          {/* Botão Reset */}
-
-          <TouchableOpacity
-
-            style={[styles.botao, styles.botaoBranco]}
-
-            onPress={() => setContador(0)}
-
-          >
-
-            <Text style={styles.botaoTextoReset}>Reset</Text>
-
-          </TouchableOpacity>
-
-
-          {/* Botão + (aumentar) */}
-
-          <TouchableOpacity
-
-            style={styles.botao}
-
-            onPress={() => setContador(contador + 1)}
-
-          >
-
-            <Text style={styles.botaoTexto}>+</Text>
-
-          </TouchableOpacity>
-
-
-        </View>
-
-      </View>
-
-
-    </View>
-
+          {/* Lista de transações */}
+          <View style={styles.secao}>
+            <Text style={styles.tituloSecao}>Transações Recentes</Text>
+            {TRANSACOES.map(transacao => (
+              <ItemTransacao
+                key={transacao.id}
+                descricao={transacao.descricao}
+                valor={transacao.valor}
+                tipo={transacao.tipo}
+                categoria={transacao.categoria}
+                data={transacao.data}
+                onPress={() => console.log('Tocou em:', transacao.descricao)}
+              />
+            ))}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </PaperProvider>
   );
-
 }
 
-
 const styles = StyleSheet.create({
-
-  container: {
-
+  safeArea: {
     flex: 1,
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    backgroundColor: '#f2f4f7',
-
-    padding: 20,
-
+    backgroundColor: cores.primaria, // cor escura no topo (status bar area)
   },
-
-  titulo: {
-
-    fontSize: 32,
-
-    fontWeight: 'bold',
-
-    color: '#ff9500',
-
-    marginBottom: 4,
-
+  scroll: {
+    flex: 1,
+    backgroundColor: cores.fundo,
   },
-
-  subtitulo: {
-
-    fontSize: 14,
-
-    color: '#777',
-
-    marginBottom: 24,
-
+  cabecalho: {
+    backgroundColor: cores.primaria,
+    paddingHorizontal: espacamento.md,
+    paddingVertical: espacamento.lg,
   },
-
-  card: {
-
-    backgroundColor: '#fff',
-
-    borderRadius: 14,      // cantos arredondados
-
-    padding: 20,
-
-    width: '100%',
-
-    alignItems: 'center',
-
-    elevation: 3,          // sombra no Android
-
-    shadowColor: '#000',   // sombra no iOS
-
-    shadowOpacity: 0.07,
-
-    shadowRadius: 6,
-
-  },
-
-  cardTitulo: {
-
-    fontSize: 15,
-
-    fontWeight: '700',
-
-    color: '#222',
-
-    marginBottom: 16,
-
-  },
-
-  contador: {
-
-    fontSize: 72,
-
-    fontWeight: 'bold',
-
-    color: '#ff9500',
-
-    marginBottom: 16,
-
-  },
-
-  botoes: {
-
-    flexDirection: 'row',  // coloca os botões lado a lado (como display:flex no CSS)
-
-    gap: 12,               // espaço entre os botões
-
-  },
-
-  botao: {
-
-    backgroundColor: '#ff9500',
-
-    paddingHorizontal: 24,
-
-    paddingVertical: 12,
-
-    borderRadius: 10,
-
-    minWidth: 60,
-
-    alignItems: 'center',
-
-  },
-
-  botaoCinza: {
-
-    backgroundColor: '#555',
-
-  },
-
-  botaoBranco: {
-
-    backgroundColor: '#eee',
-
-  },
-
-  botaoTexto: {
-
+  tituloCabecalho: {
     color: '#fff',
-
     fontSize: 22,
-
     fontWeight: 'bold',
-
   },
-
-  botaoTextoReset: {
-
-    color: '#555',
-
-    fontSize: 15,
-
-    fontWeight: '600',
-
+  subtituloCabecalho: {
+    color: '#bdc3c7',
+    fontSize: 14,
+    marginTop: 2,
   },
-
+  secao: {
+    padding: espacamento.md,
+    marginTop: espacamento.sm,
+  },
+  tituloSecao: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: cores.texto,
+    marginBottom: espacamento.md,
+  },
 });
