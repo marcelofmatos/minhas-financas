@@ -80,7 +80,7 @@ AsyncStorage
 
 Os valores **sempre são strings** — objetos e arrays precisam ser convertidos com `JSON.stringify()` ao salvar e `JSON.parse()` ao ler.
 
-### API básica
+### Uso básica
 
 ```jsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -287,10 +287,10 @@ const { data: nova } = await api.post('/transacoes', {
 
 Para projetos simples como o minhas-financas, o `fetch` é suficiente. Use Axios quando o projeto crescer ou precisar de interceptors para autenticação.
 
-### Usando a API pública do Banco Central
+### Exemplo
 
 ```jsx
-// Usando a API pública do Banco Central (gratuita, sem autenticação):
+// Usando a API pública gratuita, sem autenticação:
 const URL_DOLAR = 'https://economia.awesomeapi.com.br/json/last/USD-BRL';
 
 async function buscarCotacaoDolar() {
@@ -317,7 +317,7 @@ useEffect(() => {
 
 ---
 
-## Projeto Demo em Sala
+## Projeto de demonstração em Sala
 
 ### Como rodar
 
@@ -326,7 +326,7 @@ cd minhas-financas
 npx expo start
 ```
 
-### O que o demo mostra
+### O que é mostrado
 
 | Funcionalidade | Conceito demonstrado |
 |----------------|----------------------|
@@ -337,7 +337,7 @@ npx expo start
 | Tela vazia motivacional | Empty state com ícone |
 | Cotação do dólar | `fetch` com API pública |
 
-### Estrutura do projeto demo
+### Estrutura do projeto de demonstração
 
 ```
 minhas-financas/
