@@ -1,148 +1,236 @@
-# Passo a Passo — Adicionando Navegação ao minhas-financas
+# Passo a Passo — Tornando o minhas-financas Funcional com AsyncStorage
 
-**Módulo 06 — Aula 03**  
+**Módulo 06 — Aula 04**  
 Prof. Marcelo Matos
 
-> Continue usando o projeto `minhas-financas` criado na Aula 2. Vamos adicionar navegação acrescentando ao que já fizemos.
+> Continue com o projeto `minhas-financas` da Aula 3. Esta aula transforma o app de demonstração em um app real com dados que persistem.
 
 ---
 
 ## O que você vai construir
 
-Ao final deste tutorial, o app terá:
+Ao final deste tutorial, o app **minhas-financas** será totalmente funcional:
 
-- **Barra de abas inferior** com 4 abas: Dashboard, Nova Transação, Relatório, Sobre
-- **Dashboard** — tela da Aula 2 com o saldo e lista de transações
-- **Nova Transação** — formulário para digitar descrição, valor, tipo e categoria
-- **Relatório** — resumo de receitas x despesas do mês
-- **Sobre** — informações do app
-- Ao salvar uma nova transação, ela aparece imediatamente na lista do Dashboard
+- Transações salvas no dispositivo — **não somem ao fechar o app**
+- Formulário da Aula 3 **realmente adiciona** transações à lista
+- **Toque longo** em uma transação para excluí-la (com confirmação)
+- **Spinner de carregamento** enquanto os dados são lidos do armazenamento
+- **Tela vazia** com instrução quando não há transações
+- Saldo, receitas e despesas **calculados dinamicamente**
 
 ---
 
 ## Antes de Começar — Checklist
 
-- [ ] Projeto `minhas-financas` da Aula 2 funcionando
-- [ ] `npm install` já executado na Aula 2
+- [ ] Projeto `minhas-financas` das Aulas 2 e 3 funcionando
+- [ ] App com Tab Navigator (Dashboard / Nova Transação / Relatório)
 - [ ] Expo Go no celular (ou emulador Android)
-- [ ] VS Code aberto na pasta do projeto
+- [ ] Terminal aberto na pasta `minhas-financas`
 
 ---
 
-## Passo 1 — Instalar o React Navigation
+## Passo 1 — Instalar o AsyncStorage
 
-### 1.1 — Abra o terminal na pasta do projeto
-
-```bash
-cd minhas-financas
-```
-
-### 1.2 — Instale as dependências
-
-Execute cada comando abaixo:
+### 1.1 — No terminal, execute:
 
 ```bash
-npm install @react-navigation/native
-npx expo install react-native-screens react-native-safe-area-context
-npm install @react-navigation/bottom-tabs
-npm install @react-navigation/native-stack
+npx expo install @react-native-async-storage/async-storage
 ```
 
-> **Por que tantos pacotes?** O React Navigation é modular — você instala apenas o que precisa. `native-screens` melhora a performance usando telas nativas do sistema operacional.
+> Use `npx expo install` (não `npm install`) para garantir que a versão seja compatível com a versão do Expo que você está usando.
 
-> **Sobre o `react-native-safe-area-context`:** além de ser dependência do React Navigation, esse pacote fornece um `SafeAreaView` mais confiável do que o do `react-native` (que só funciona no iOS e está em vias de deprecação). A partir de agora, **todo `SafeAreaView` do projeto será importado de `react-native-safe-area-context`**, garantindo que o conteúdo respeite o notch e a barra de status em iOS e Android.
+### 1.2 — Verifique se apareceu no package.json
 
-### 1.3 — Verifique a instalação
+Deve aparecer: `"@react-native-async-storage/async-storage": "x.x.x"`
 
-Após instalar, o `package.json` deve ter estas dependências:
+---
 
-```json
-{
-  "dependencies": {
-    "@react-navigation/bottom-tabs": "^7.x.x",
-    "@react-navigation/native": "^7.x.x",
-    "@react-navigation/native-stack": "^7.x.x",
-    "react-native-screens": "~4.x.x",
-    "react-native-safe-area-context": "~5.x.x"
+## Passo 2 — Criar a pasta de contexto
+
+```bash
+mkdir context
+```
+
+---
+
+## Passo 3 — Criar o TransacoesContext
+
+Este arquivo é o coração do app nesta aula. Ele gerencia todo o estado de transações e a persistência com AsyncStorage.
+
+### 3.1 — Crie `context/TransacoesContext.js`
+
+```jsx
+// context/TransacoesContext.js
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Chave usada para salvar no AsyncStorage
+// Prefixo '@minhasfinancas:' evita conflito com outros apps
+const CHAVE_STORAGE = '@minhasfinancas:transacoes';
+
+// 1. Criamos o contexto vazio
+const TransacoesContext = createContext(null);
+
+// 2. O Provider é o componente que envolve o app e disponibiliza o estado
+export function TransacoesProvider({ children }) {
+  const [transacoes, setTransacoes] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+
+  // Executa uma única vez quando o app abre
+  useEffect(() => {
+    carregarTransacoes();
+  }, []);
+
+  // Lê as transações salvas no dispositivo
+  async function carregarTransacoes() {
+    try {
+      setCarregando(true);
+      const json = await AsyncStorage.getItem(CHAVE_STORAGE);
+      if (json !== null) {
+        setTransacoes(JSON.parse(json));
+      }
+    } catch (erro) {
+      console.error('Erro ao carregar transações:', erro);
+    } finally {
+      // "finally" sempre executa, mesmo se der erro
+      setCarregando(false);
+    }
   }
+
+  // Adiciona uma nova transação e salva no AsyncStorage
+  async function adicionarTransacao(novaTransacao) {
+    const atualizadas = [novaTransacao, ...transacoes];
+    setTransacoes(atualizadas);  // atualiza a UI imediatamente
+    await AsyncStorage.setItem(CHAVE_STORAGE, JSON.stringify(atualizadas));
+  }
+
+  // Remove uma transação pelo id e salva no AsyncStorage
+  async function removerTransacao(id) {
+    const atualizadas = transacoes.filter(t => t.id !== id);
+    setTransacoes(atualizadas);
+    await AsyncStorage.setItem(CHAVE_STORAGE, JSON.stringify(atualizadas));
+  }
+
+  // Calcula os totais a partir do estado atual
+  const receitas = transacoes
+    .filter(t => t.tipo === 'receita')
+    .reduce((soma, t) => soma + t.valor, 0);
+
+  const despesas = transacoes
+    .filter(t => t.tipo === 'despesa')
+    .reduce((soma, t) => soma + t.valor, 0);
+
+  // Tudo que o contexto disponibiliza para as telas
+  const valor = {
+    transacoes,
+    carregando,
+    receitas,
+    despesas,
+    saldo: receitas - despesas,
+    adicionarTransacao,
+    removerTransacao,
+  };
+
+  return (
+    <TransacoesContext.Provider value={valor}>
+      {children}
+    </TransacoesContext.Provider>
+  );
+}
+
+// 3. Hook customizado — facilita o uso do contexto nas telas
+export function useTransacoes() {
+  const contexto = useContext(TransacoesContext);
+  if (!contexto) {
+    throw new Error('useTransacoes precisa estar dentro de <TransacoesProvider>');
+  }
+  return contexto;
 }
 ```
 
----
+**O que acontece aqui — resumo:**
 
-## Passo 2 — Criar a estrutura de pastas
-
-### 2.1 — Crie as pastas `screens` e `routes`
-
-```bash
-mkdir screens routes
-```
-
-### 2.2 — Estrutura que teremos ao final
-
-```
-minhas-financas/
-├── App.js
-├── routes/
-│   ├── TabRoutes.js                      ← barra de abas (Passo 6)
-│   └── DashboardStack.js                 ← stack com detalhe (Passo 8)
-├── screens/
-│   ├── DashboardScreen.js                ← tela principal (Passo 3)
-│   ├── NovaTransacaoScreen.js            ← formulário (Passo 4)
-│   ├── RelatorioScreen.js                ← resumo mensal (Passo 5)
-│   ├── SobreScreen.js                    ← sobre o app (Passo 5)
-│   ├── DetalheTransacaoScreen.js         ← detalhe de transação (Passo 8)
-│   └── BoasVindasScreen.js               ← tela de boas-vindas (Passo 9)
-├── components/                           ← da Aula 2
-├── theme.js                              ← da Aula 2
-└── package.json
-```
-
-> Nesta aula, começamos apenas com `screens/` e `routes/` vazios. Os arquivos acima serão criados ao longo dos passos indicados entre parênteses.
+| Função | O que faz |
+|--------|-----------|
+| `carregarTransacoes()` | Lê as transações do AsyncStorage ao abrir o app |
+| `adicionarTransacao(t)` | Adiciona ao estado + salva no AsyncStorage |
+| `removerTransacao(id)` | Remove do estado + salva no AsyncStorage |
+| `receitas`, `despesas`, `saldo` | Calculados automaticamente a partir do estado |
 
 ---
 
-## Passo 3 — Criar a DashboardScreen
+## Passo 4 — Conectar o Provider ao App.js
 
-A `DashboardScreen` parte do conteúdo da tela principal da Aula 2 (cabeçalho, `CartaoSaldo`, `CardsResumo` e a lista de transações), mas ganha três responsabilidades novas:
+O `TransacoesProvider` precisa envolver todas as telas para que elas possam acessar o contexto.
 
-- **recebe `navigation` e `route`** como props — toda tela registrada no React Navigation as recebe automaticamente;
-- **escuta `route.params.novaTransacao`** com um `useEffect` para inserir transações criadas no formulário no topo da lista;
-- **ajusta o status bar** com `useFocusEffect` para que os ícones do sistema fiquem legíveis sobre o cabeçalho azul.
+### 4.1 — Atualize o `App.js`
 
-### 3.1 — Crie `screens/DashboardScreen.js`
+```jsx
+// App.js
+import React, { useState } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { TabRoutes } from './routes/TabRoutes';
+import { TransacoesProvider } from './context/TransacoesContext';
+import { BoasVindasScreen } from './screens/BoasVindasScreen';
+
+export default function App() {
+  // Mantém a navegação condicional da Aula 3 (tela de boas-vindas no primeiro acesso)
+  const [primeiroAcesso, setPrimeiroAcesso] = useState(true);
+
+  if (primeiroAcesso) {
+    return (
+      <SafeAreaProvider>
+        <BoasVindasScreen onConcluir={() => setPrimeiroAcesso(false)} />
+      </SafeAreaProvider>
+    );
+  }
+
+  return (
+    <SafeAreaProvider>
+      <TransacoesProvider>
+        <NavigationContainer>
+          <TabRoutes />
+        </NavigationContainer>
+      </TransacoesProvider>
+    </SafeAreaProvider>
+  );
+}
+```
+
+> **Lembrete:** o `SafeAreaProvider` (do `react-native-safe-area-context`) já foi instalado na Aula 3 junto com o React Navigation. Mantenha-o no nível mais alto para que o `SafeAreaView` continue funcionando em todas as telas.
+
+> **Ordem importa:** `TransacoesProvider` precisa estar fora de `NavigationContainer` (ou dentro — ambos funcionam). O que não pode é estar fora do que envolve as telas — as telas precisam estar dentro do Provider. Note que ele só envolve o app principal: a `BoasVindasScreen` da Aula 3 não precisa do contexto de transações.
+
+---
+
+## Passo 5 — Atualizar a DashboardScreen
+
+Agora o Dashboard usa o contexto em vez de dados estáticos.
+
+### 5.1 — Substitua o conteúdo de `screens/DashboardScreen.js`
 
 ```jsx
 // screens/DashboardScreen.js
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet } from 'react-native';
+import {
+  ScrollView, View, Text, StyleSheet,
+  ActivityIndicator, Alert
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { setStatusBarStyle } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import { CartaoSaldo } from '../components/CartaoSaldo';
 import { CardsResumo } from '../components/CardsResumo';
 import { ItemTransacao } from '../components/ItemTransacao';
+import { useTransacoes } from '../context/TransacoesContext';
 import { cores, espacamento } from '../theme';
 
-const TRANSACOES_INICIAIS = [
-  { id: '1', descricao: 'Salário', valor: 3200, tipo: 'receita', categoria: 'salario', data: '01/05/2026' },
-  { id: '2', descricao: 'Aluguel', valor: 900, tipo: 'despesa', categoria: 'moradia', data: '05/05/2026' },
-  { id: '3', descricao: 'Supermercado', valor: 280.50, tipo: 'despesa', categoria: 'alimentacao', data: '07/05/2026' },
-  { id: '4', descricao: 'Energia', valor: 400, tipo: 'despesa', categoria: 'moradia', data: '09/05/2026' },
-  { id: '5', descricao: 'Água', valor: 70.50, tipo: 'despesa', categoria: 'moradia', data: '10/05/2026' },
-];
-
 export function DashboardScreen({ navigation, route }) {
-  const [transacoes, setTransacoes] = React.useState(TRANSACOES_INICIAIS);
+  const { transacoes, saldo, receitas, despesas, carregando, removerTransacao } = useTransacoes();
 
-  // Recebe novas transações vindas da tela de formulário
-  React.useEffect(() => {
-    if (route.params?.novaTransacao) {
-      setTransacoes(prev => [route.params.novaTransacao, ...prev]);
-    }
-  }, [route.params?.novaTransacao]);
-
-  // Status bar claro enquanto o Dashboard está em foco (cabeçalho azul)
+  // Mantém o status bar claro enquanto o Dashboard está em foco (cabeçalho azul) — vindo da Aula 3
   useFocusEffect(
     React.useCallback(() => {
       setStatusBarStyle('light');
@@ -150,40 +238,71 @@ export function DashboardScreen({ navigation, route }) {
     }, [])
   );
 
-  const receitas = transacoes
-    .filter(t => t.tipo === 'receita')
-    .reduce((acc, t) => acc + t.valor, 0);
+  function confirmarExclusao(id, descricao) {
+    Alert.alert(
+      'Excluir transação',
+      `Deseja excluir "${descricao}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Excluir', style: 'destructive', onPress: () => removerTransacao(id) },
+      ]
+    );
+  }
 
-  const despesas = transacoes
-    .filter(t => t.tipo === 'despesa')
-    .reduce((acc, t) => acc + t.valor, 0);
+  // Tela de carregamento
+  if (carregando) {
+    return (
+      <View style={styles.centralizador}>
+        <ActivityIndicator size="large" color={cores.primaria} />
+        <Text style={styles.textoCarregando}>Carregando suas finanças...</Text>
+      </View>
+    );
+  }
 
+  // Renderiza o Dashboard: cabeçalho, cartão de saldo, resumo e lista de transações (com tela vazia quando não há dados)
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.cabecalho}>
           <Text style={styles.titulo}>Minhas Finanças</Text>
-          <Text style={styles.subtitulo}>Maio 2026</Text>
+          <Text style={styles.subtitulo}>
+            {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+          </Text>
         </View>
 
-        <CartaoSaldo saldo={receitas - despesas} mes="Maio" />
+        <CartaoSaldo
+          saldo={saldo}
+          mes={new Date().toLocaleDateString('pt-BR', { month: 'long' })}
+        />
+
         <CardsResumo receitas={receitas} despesas={despesas} />
 
         <View style={styles.secao}>
           <Text style={styles.tituloSecao}>Transações Recentes</Text>
-          {transacoes.map(t => (
-            <ItemTransacao
-              key={t.id}
-              descricao={t.descricao}
-              valor={t.valor}
-              tipo={t.tipo}
-              categoria={t.categoria}
-              data={t.data}
-              // Navega para o detalhe passando a transação inteira via route.params
-              // (a tela DetalheTransacao será criada no Passo 8)
-              onPress={() => navigation.navigate('DetalheTransacao', { transacao: t })}
-            />
-          ))}
+
+          {transacoes.length === 0 ? (
+            <View style={styles.vazio}>
+              <Ionicons name="wallet-outline" size={64} color="#bdc3c7" />
+              <Text style={styles.textoVazio}>Nenhuma transação ainda</Text>
+              <Text style={styles.subtextoVazio}>
+                Toque em "Nova Transação" para começar
+              </Text>
+            </View>
+          ) : (
+            transacoes.map(t => (
+              <ItemTransacao
+                key={t.id}
+                descricao={t.descricao}
+                valor={t.valor}
+                tipo={t.tipo}
+                categoria={t.categoria}
+                data={t.data}
+                // Navega para o detalhe (DetalheTransacaoScreen criada na Aula 3)
+                onPress={() => navigation.navigate('DetalheTransacao', { transacao: t })}
+                onLongPress={() => confirmarExclusao(t.id, t.descricao)}
+              />
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -193,27 +312,134 @@ export function DashboardScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: cores.primaria },
   scroll: { flex: 1, backgroundColor: cores.fundo },
+  centralizador: {
+    flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: cores.fundo,
+  },
+  textoCarregando: { marginTop: 12, color: cores.subtexto, fontSize: 14 },
   cabecalho: {
     backgroundColor: cores.primaria,
     paddingHorizontal: espacamento.md,
     paddingVertical: espacamento.lg,
   },
   titulo: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
-  subtitulo: { color: '#bdc3c7', fontSize: 14, marginTop: 2 },
+  subtitulo: { color: '#bdc3c7', fontSize: 14, marginTop: 2, textTransform: 'capitalize' },
   secao: { padding: espacamento.md },
   tituloSecao: { fontSize: 17, fontWeight: '700', color: cores.texto, marginBottom: espacamento.md },
+  vazio: { alignItems: 'center', paddingVertical: 48, gap: 8 },
+  textoVazio: { fontSize: 17, fontWeight: '600', color: cores.subtexto },
+  subtextoVazio: { fontSize: 13, color: '#bdc3c7', textAlign: 'center' },
 });
 ```
 
-> **Por que `edges={['top']}` no `SafeAreaView`?** O fundo do `SafeAreaView` é azul escuro (`cores.primaria`), pois o cabeçalho precisa cobrir o status bar. Sem essa prop, no Android a `SafeAreaView` também aplica padding na parte de baixo — pintando uma faixa azul logo acima do tab bar. Limitando ao topo, o respiro inferior fica por conta do próprio Tab Navigator.
+### 5.2 — Adicionar `onLongPress` ao ItemTransacao
 
-> **Por que o `useFocusEffect` mexendo no status bar?** No Android, os ícones do status bar (relógio, sinal, bateria) são pretos por padrão e ficam ilegíveis sobre o cabeçalho azul. O `useFocusEffect` do React Navigation roda quando a tela entra em foco e roda o cleanup quando sai — perfeito para deixar os ícones claros só no Dashboard e voltar ao escuro nas outras abas. O `setStatusBarStyle` vem do `expo-status-bar` (já incluído no template Expo).
+Substitua o conteúdo completo de `components/ItemTransacao.js` pelo código abaixo. Em relação à Aula 2, apenas a prop `onLongPress` foi acrescentada (linhas marcadas com `// ← NOVO`).
+
+```jsx
+// components/ItemTransacao.js
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { cores, espacamento, raio } from '../theme';
+
+// Mapeamento de categoria para ícone Ionicons
+const ICONES = {
+  alimentacao: 'restaurant',
+  transporte: 'car',
+  saude: 'medical',
+  lazer: 'game-controller',
+  salario: 'cash',
+  moradia: 'home',
+  educacao: 'school',
+  outros: 'ellipsis-horizontal-circle',
+};
+
+export function ItemTransacao({ descricao, valor, categoria, tipo, data, onPress, onLongPress }) { // ← NOVO: prop onLongPress
+  const isReceita = tipo === 'receita';
+  const nomeIcone = ICONES[categoria] ?? 'ellipsis-horizontal-circle';
+
+  // Renderiza o item da lista: ícone da categoria, descrição/data e valor formatado
+  return (
+    <TouchableOpacity
+      style={styles.container}
+      onPress={onPress}
+      onLongPress={onLongPress}                                                                    // ← NOVO: dispara a exclusão (toque longo)
+      activeOpacity={0.7}
+    >
+      <View style={[
+        styles.iconeContainer,
+        { backgroundColor: isReceita ? cores.receitaFundo : cores.despesaFundo }
+      ]}>
+        <Ionicons
+          name={nomeIcone}
+          size={22}
+          color={isReceita ? cores.receita : cores.despesa}
+        />
+      </View>
+
+      <View style={styles.info}>
+        <Text style={styles.descricao} numberOfLines={1}>{descricao}</Text>
+        <Text style={styles.data}>{data}</Text>
+      </View>
+
+      <Text style={[styles.valor, { color: isReceita ? cores.receita : cores.despesa }]}>
+        {isReceita ? '+' : '-'} R$ {valor.toFixed(2)}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: cores.cartao,
+    borderRadius: raio.md,
+    padding: espacamento.md,
+    marginBottom: espacamento.sm,
+    // Sombra (iOS):
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    // Sombra (Android):
+    elevation: 2,
+  },
+  iconeContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,            // círculo perfeito (metade do width/height)
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: espacamento.md,
+  },
+  info: {
+    flex: 1,                     // ocupa todo o espaço entre o ícone e o valor
+  },
+  descricao: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: cores.texto,
+  },
+  data: {
+    fontSize: 12,
+    color: cores.subtexto,
+    marginTop: 2,
+  },
+  valor: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginLeft: espacamento.sm,
+  },
+});
+```
 
 ---
 
-## Passo 4 — Criar a NovaTransacaoScreen
+## Passo 6 — Atualizar a NovaTransacaoScreen
 
-### 4.1 — Crie `screens/NovaTransacaoScreen.js`
+Troque o `navigation.navigate('Dashboard', { novaTransacao })` pela função do contexto.
+
+### 6.1 — Substitua o conteúdo completo de `screens/NovaTransacaoScreen.js`
 
 ```jsx
 // screens/NovaTransacaoScreen.js
@@ -224,6 +450,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { cores, espacamento, raio } from '../theme';
+import { useTransacoes } from '../context/TransacoesContext';  // ← NOVO
 
 const CATEGORIAS = [
   { id: 'alimentacao', label: 'Alimentação', icone: 'restaurant' },
@@ -241,45 +468,41 @@ export function NovaTransacaoScreen({ navigation }) {
   const [tipo, setTipo] = useState('despesa');
   const [categoria, setCategoria] = useState('outros');
 
-  const salvar = () => {
-    // Validação básica
+  const { adicionarTransacao } = useTransacoes();  // ← NOVO (dentro do componente)
+
+  // ↓ Função salvar atualizada para usar o contexto
+  const salvar = async () => {
     if (!descricao.trim()) {
-      Alert.alert('Atenção', 'Digite uma descrição para a transação.');
+      Alert.alert('Atenção', 'Digite uma descrição.');
       return;
     }
     const valorNumerico = parseFloat(valor.replace(',', '.'));
     if (!valor || isNaN(valorNumerico) || valorNumerico <= 0) {
-      Alert.alert('Atenção', 'Digite um valor válido maior que zero.');
+      Alert.alert('Atenção', 'Digite um valor válido.');
       return;
     }
 
-    const novaTransacao = {
+    await adicionarTransacao({
       id: Date.now().toString(),
       descricao: descricao.trim(),
       valor: valorNumerico,
       tipo,
       categoria,
       data: new Date().toLocaleDateString('pt-BR'),
-    };
-
-    // Passa a nova transação para o screen DashboardHome (dentro do DashboardStack)
-    navigation.navigate('Dashboard', {
-      screen: 'DashboardHome',
-      params: { novaTransacao },
     });
 
-    // Limpa o formulário
     setDescricao('');
     setValor('');
     setTipo('despesa');
     setCategoria('outros');
+
+    navigation.navigate('Dashboard');
   };
 
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <Text style={styles.tituloPagina}>Nova Transação</Text>
 
-      {/* Tipo: Receita ou Despesa */}
       <Text style={styles.label}>Tipo</Text>
       <View style={styles.seletor}>
         {['receita', 'despesa'].map(t => (
@@ -303,7 +526,6 @@ export function NovaTransacaoScreen({ navigation }) {
         ))}
       </View>
 
-      {/* Descrição */}
       <Text style={styles.label}>Descrição</Text>
       <TextInput
         style={styles.input}
@@ -314,7 +536,6 @@ export function NovaTransacaoScreen({ navigation }) {
         returnKeyType="next"
       />
 
-      {/* Valor */}
       <Text style={styles.label}>Valor (R$)</Text>
       <TextInput
         style={styles.input}
@@ -325,7 +546,6 @@ export function NovaTransacaoScreen({ navigation }) {
         returnKeyType="done"
       />
 
-      {/* Categoria */}
       <Text style={styles.label}>Categoria</Text>
       <View style={styles.categorias}>
         {CATEGORIAS.map(cat => (
@@ -352,7 +572,6 @@ export function NovaTransacaoScreen({ navigation }) {
         ))}
       </View>
 
-      {/* Botão Salvar */}
       <TouchableOpacity style={styles.botaoSalvar} onPress={salvar} activeOpacity={0.8}>
         <Ionicons name="checkmark" size={22} color="#fff" />
         <Text style={styles.textoBotao}>Salvar Transação</Text>
@@ -400,9 +619,11 @@ const styles = StyleSheet.create({
 
 ---
 
-## Passo 5 — Criar a RelatorioScreen e a SobreScreen
+## Passo 7 — Atualizar a RelatorioScreen
 
-### 5.1 — Crie `screens/RelatorioScreen.js`
+### 7.1 — Substitua o conteúdo completo de `screens/RelatorioScreen.js`
+
+> ⚠️ **Atenção:** copie e cole o arquivo **inteiro** abaixo, substituindo todo o conteúdo do arquivo.
 
 ```jsx
 // screens/RelatorioScreen.js
@@ -410,13 +631,12 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { cores, espacamento, raio } from '../theme';
+import { useTransacoes } from '../context/TransacoesContext';  // ← NOVO
 
 export function RelatorioScreen() {
-  // Na Aula 4, estes dados virão do Context (AsyncStorage)
-  const receitas = 3700;
-  const despesas = 2206.30;
-  const saldo = receitas - despesas;
-  const total = receitas + despesas;
+  const { receitas, despesas, saldo, transacoes } = useTransacoes();  // ← NOVO
+
+  const total = receitas + despesas || 1;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -483,451 +703,360 @@ const styles = StyleSheet.create({
 
 ---
 
-### 5.2 — Crie `screens/SobreScreen.js`
+## Passo 8 — Testar o app completo
+
+Salve todos os arquivos e aguarde o Expo recarregar.
+
+### 8.1 — Roteiro de teste
+
+1. **Abra o app** → deve aparecer a tela vazia com ícone de carteira
+2. **Toque em "Nova Transação"** → preencha: "Salário", R$ 3200, Receita, Salário
+3. **Toque em "Salvar"** → volta para o Dashboard com a transação na lista
+4. **Adicione uma despesa** → "Supermercado", R$ 150, Despesa, Alimentação
+5. **Verifique o saldo** → deve ser R$ 3.050,00 (3200 − 150)
+6. **Feche e reabra o app** → as transações devem continuar lá ✅
+7. **Toque longo em uma transação** → diálogo de confirmação aparece
+8. **Confirme a exclusão** → transação some e saldo atualiza
+
+---
+
+## Passo 9 — Consumindo uma API externa: Cotações do Dia
+
+Agora vamos buscar dados reais da internet usando `fetch`. Vamos exibir as cotações do Dólar e do Euro no Dashboard usando a **AwesomeAPI** — gratuita, sem cadastro e em português.
+
+> **Por que essa API?** `https://economia.awesomeapi.com.br` é mantida pela comunidade brasileira, retorna dados em BRL e não exige chave de acesso.
+
+---
+
+### 9.1 — Criar a pasta `hooks`
+
+```bash
+mkdir hooks
+```
+
+> **O que é um custom hook?** É uma função que começa com `use` e encapsula lógica reutilizável com hooks do React (`useState`, `useEffect`). Aqui usamos para separar a lógica de busca da API do componente visual.
+
+---
+
+### 9.2 — Crie `hooks/useCotacoes.js`
 
 ```jsx
-// screens/SobreScreen.js
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { cores, espacamento } from '../theme';
+// hooks/useCotacoes.js
+import { useState, useEffect } from 'react';
 
-export function SobreScreen() {
+// Documentação em https://docs.awesomeapi.com.br/api-de-moedas
+// Tem limitacao de consultas
+// const API_URL = 'https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL';
+
+// API de exemplo
+// Sem a limitacao de consulta
+const API_URL = 'https://api.cotacoes.cloud.marcelomatos.dev/cotacoes.json';
+
+export function useCotacoes() {
+  const [cotacoes, setCotacoes] = useState(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState(null);
+
+  useEffect(() => {
+    buscarCotacoes();
+  }, []);
+
+  async function buscarCotacoes() {
+    try {
+      setCarregando(true);
+      setErro(null);
+      const resposta = await fetch(API_URL);
+      if (!resposta.ok) throw new Error('Falha na requisição');
+      const dados = await resposta.json();
+      setCotacoes({
+        dolar: parseFloat(dados.USDBRL.bid),
+        euro: parseFloat(dados.EURBRL.bid),
+      });
+    } catch (e) {
+      setErro('Não foi possível carregar as cotações.');
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  return { cotacoes, carregando, erro, atualizar: buscarCotacoes };
+}
+```
+
+**O que acontece aqui:**
+
+| Elemento | Explicação |
+|----------|-----------|
+| `fetch(API_URL)` | Faz a requisição HTTP GET para a API |
+| `resposta.ok` | Verifica se o status HTTP foi 200–299 |
+| `resposta.json()` | Converte o corpo da resposta para objeto JS |
+| `dados.USDBRL.bid` | O campo `bid` é o preço de compra do dólar |
+| `catch` | Captura erros de rede ou de parse |
+| `finally` | Sempre desliga o loading, mesmo se der erro |
+| `atualizar` | Expõe a função para o componente chamar no botão de refresh |
+
+---
+
+### 9.3 — Crie `components/CartaoCotacoes.js`
+
+```jsx
+// components/CartaoCotacoes.js
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useCotacoes } from '../hooks/useCotacoes';
+import { cores, espacamento, raio } from '../theme';
+
+export function CartaoCotacoes() {
+  const { cotacoes, carregando, erro, atualizar } = useCotacoes();
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.titulo}>Minhas Finanças</Text>
-        <Text style={styles.versao}>Versão 1.0.0</Text>
-        <Text style={styles.descricao}>
-          App de controle financeiro pessoal desenvolvido durante o Módulo 06
-          do Curso de Capacitação em Desenvolvimento Full Stack — ITEAM.
-        </Text>
-        <Text style={styles.tech}>React Native · Expo · AsyncStorage</Text>
+    <View style={styles.container}>
+      <View style={styles.cabecalho}>
+        <Text style={styles.titulo}>Cotações do Dia</Text>
+        <TouchableOpacity onPress={atualizar}>
+          <Ionicons name="refresh" size={18} color={cores.subtexto} />
+        </TouchableOpacity>
       </View>
-    </SafeAreaView>
+
+      {carregando ? (
+        <ActivityIndicator size="small" color={cores.primaria} />
+      ) : erro ? (
+        <Text style={styles.erro}>{erro}</Text>
+      ) : (
+        <View style={styles.linha}>
+          <View style={styles.item}>
+            <Text style={styles.moeda}>🇺🇸 Dólar</Text>
+            <Text style={styles.valor}>R$ {cotacoes.dolar.toFixed(2)}</Text>
+          </View>
+          <View style={styles.separador} />
+          <View style={styles.item}>
+            <Text style={styles.moeda}>🇪🇺 Euro</Text>
+            <Text style={styles.valor}>R$ {cotacoes.euro.toFixed(2)}</Text>
+          </View>
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: cores.fundo },
-  container: { flex: 1, padding: espacamento.md, justifyContent: 'center', alignItems: 'center' },
-  titulo: { fontSize: 26, fontWeight: 'bold', color: cores.texto, marginBottom: 4 },
-  versao: { fontSize: 14, color: cores.subtexto, marginBottom: espacamento.lg },
-  descricao: { fontSize: 15, color: cores.texto, textAlign: 'center', lineHeight: 22, marginBottom: espacamento.md },
-  tech: { fontSize: 13, color: cores.subtexto },
+  container: {
+    backgroundColor: cores.cartao,
+    borderRadius: raio.md,
+    padding: espacamento.md,
+    marginHorizontal: espacamento.md,
+    marginBottom: espacamento.md,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+  },
+  cabecalho: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: espacamento.sm,
+  },
+  titulo: { fontSize: 14, fontWeight: '600', color: cores.subtexto },
+  linha: { flexDirection: 'row', alignItems: 'center' },
+  item: { flex: 1, alignItems: 'center' },
+  moeda: { fontSize: 13, color: cores.subtexto, marginBottom: 2 },
+  valor: { fontSize: 18, fontWeight: '700', color: cores.texto },
+  separador: { width: 1, height: 36, backgroundColor: '#eee' },
+  erro: { fontSize: 13, color: cores.despesa, textAlign: 'center' },
 });
 ```
 
 ---
 
-## Passo 6 — Criar as rotas de navegação
+### 9.4 — Adicionar o CartaoCotacoes ao DashboardScreen
 
-### 6.1 — Crie `routes/TabRoutes.js`
+Substitua o conteúdo completo de `screens/DashboardScreen.js` pelo código abaixo. Em relação ao Passo 5.1, foram acrescentados o import (linha marcada com `// ← NOVO`) e a renderização do `<CartaoCotacoes />` logo após `<CardsResumo />`.
 
 ```jsx
-// routes/TabRoutes.js
+// screens/DashboardScreen.js
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import {
+  ScrollView, View, Text, StyleSheet,
+  ActivityIndicator, Alert
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { setStatusBarStyle } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-// A aba Dashboard aponta para um Stack (criado no Passo 8), não diretamente para a tela
-import { DashboardStack } from './DashboardStack';
-import { NovaTransacaoScreen } from '../screens/NovaTransacaoScreen';
-import { RelatorioScreen } from '../screens/RelatorioScreen';
-import { SobreScreen } from '../screens/SobreScreen';
+import { CartaoSaldo } from '../components/CartaoSaldo';
+import { CardsResumo } from '../components/CardsResumo';
+import { CartaoCotacoes } from '../components/CartaoCotacoes';   // ← NOVO
+import { ItemTransacao } from '../components/ItemTransacao';
+import { useTransacoes } from '../context/TransacoesContext';
+import { cores, espacamento } from '../theme';
 
-const Tab = createBottomTabNavigator();
+export function DashboardScreen({ navigation, route }) {
+  const { transacoes, saldo, receitas, despesas, carregando, removerTransacao } = useTransacoes();
 
-const ICONES_TAB = {
-  Dashboard: { ativa: 'home', inativa: 'home-outline' },
-  'Nova Transação': { ativa: 'add-circle', inativa: 'add-circle-outline' },
-  Relatório: { ativa: 'bar-chart', inativa: 'bar-chart-outline' },
-  Sobre: { ativa: 'information-circle', inativa: 'information-circle-outline' },
-};
-
-export function TabRoutes() {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: '#2c3e50',
-        tabBarInactiveTintColor: '#95a5a6',
-        tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopColor: '#eee',
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 4,
-        },
-        tabBarIcon: ({ focused, color, size }) => {
-          const { ativa, inativa } = ICONES_TAB[route.name];
-          return <Ionicons name={focused ? ativa : inativa} size={size} color={color} />;
-        },
-      })}
-    >
-      <Tab.Screen name="Dashboard" component={DashboardStack} />
-      <Tab.Screen name="Nova Transação" component={NovaTransacaoScreen} />
-      <Tab.Screen name="Relatório" component={RelatorioScreen} />
-      <Tab.Screen name="Sobre" component={SobreScreen} />
-    </Tab.Navigator>
+  // Mantém o status bar claro enquanto o Dashboard está em foco (cabeçalho azul) — vindo da Aula 3
+  useFocusEffect(
+    React.useCallback(() => {
+      setStatusBarStyle('light');
+      return () => setStatusBarStyle('dark');
+    }, [])
   );
-}
-```
 
-> **Observação:** o import de `DashboardStack` aponta para um arquivo que ainda não existe — ele será criado no Passo 8. O app só compila por inteiro quando o Passo 8 estiver concluído.
-
----
-
-## Passo 7 — Atualizar o App.js
-
-### 7.1 — Substitua o conteúdo do `App.js`
-
-```jsx
-// App.js
-import React, { useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { TabRoutes } from './routes/TabRoutes';
-// BoasVindasScreen será criada no Passo 9
-import { BoasVindasScreen } from './screens/BoasVindasScreen';
-
-export default function App() {
-  // Controla qual "árvore" de componentes é renderizada (navegação condicional, Passo 9)
-  const [primeiroAcesso, setPrimeiroAcesso] = useState(true);
-
-  // Se for o primeiro acesso, mostra a tela de boas-vindas
-  // fora do NavigationContainer — ela não precisa de navegação
-  if (primeiroAcesso) {
-    return (
-      <SafeAreaProvider>
-        <BoasVindasScreen onConcluir={() => setPrimeiroAcesso(false)} />
-      </SafeAreaProvider>
+  function confirmarExclusao(id, descricao) {
+    Alert.alert(
+      'Excluir transação',
+      `Deseja excluir "${descricao}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Excluir', style: 'destructive', onPress: () => removerTransacao(id) },
+      ]
     );
   }
 
-  return (
-    <SafeAreaProvider>
-      <NavigationContainer>
-        <TabRoutes />
-      </NavigationContainer>
-    </SafeAreaProvider>
-  );
-}
-```
-
-> **Por que o `SafeAreaProvider`?** Ele expõe (via Context) os valores das áreas seguras do dispositivo (notch, barra de status, home indicator). O `SafeAreaView` que importamos de `react-native-safe-area-context` lê esses valores e aplica o `padding` correto em qualquer tela do app — por isso o Provider precisa ficar no nível mais alto possível.
-
-> **Observação:** o import de `BoasVindasScreen` aponta para um arquivo que ainda não existe — ele será criado no Passo 9. O app só compila por inteiro quando os Passos 8 e 9 estiverem concluídos.
-
----
-
-## Passo 8 — Stack Navigator: Tela de Detalhe da Transação
-
-O **Stack Navigator** empilha telas umas sobre as outras — ao navegar, a nova tela entra pela direita; ao voltar, sai pela direita. É o padrão de navegação mais comum em apps mobile.
-
-Vamos usá-lo para abrir uma tela de detalhe ao tocar em uma transação no Dashboard.
-
-### 8.1 — Crie `screens/DetalheTransacaoScreen.js`
-
-```jsx
-// screens/DetalheTransacaoScreen.js
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { cores, espacamento, raio } from '../theme';
-
-export function DetalheTransacaoScreen({ route, navigation }) {
-  const { transacao } = route.params;  // recebe os dados via navigate()
-  const isReceita = transacao.tipo === 'receita';
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-
-        {/* Botão voltar */}
-        <TouchableOpacity style={styles.botaoVoltar} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={cores.texto} />
-          <Text style={styles.textoVoltar}>Voltar</Text>
-        </TouchableOpacity>
-
-        {/* Ícone do tipo */}
-        <View style={[styles.icone, { backgroundColor: isReceita ? cores.receitaFundo : cores.despesaFundo }]}>
-          <Ionicons
-            name={isReceita ? 'arrow-up-circle' : 'arrow-down-circle'}
-            size={48}
-            color={isReceita ? cores.receita : cores.despesa}
-          />
-        </View>
-
-        <Text style={styles.descricao}>{transacao.descricao}</Text>
-        <Text style={[styles.valor, { color: isReceita ? cores.receita : cores.despesa }]}>
-          {isReceita ? '+' : '-'} R$ {transacao.valor.toFixed(2)}
-        </Text>
-
-        <View style={styles.tabela}>
-          <View style={styles.linha}>
-            <Text style={styles.rotulo}>Tipo</Text>
-            <Text style={styles.dado}>{isReceita ? 'Receita' : 'Despesa'}</Text>
-          </View>
-          <View style={styles.linha}>
-            <Text style={styles.rotulo}>Categoria</Text>
-            <Text style={styles.dado}>{transacao.categoria}</Text>
-          </View>
-          <View style={styles.linha}>
-            <Text style={styles.rotulo}>Data</Text>
-            <Text style={styles.dado}>{transacao.data}</Text>
-          </View>
-        </View>
+  // Tela de carregamento
+  if (carregando) {
+    return (
+      <View style={styles.centralizador}>
+        <ActivityIndicator size="large" color={cores.primaria} />
+        <Text style={styles.textoCarregando}>Carregando suas finanças...</Text>
       </View>
-    </SafeAreaView>
-  );
-}
+    );
+  }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: cores.fundo },
-  container: { flex: 1, padding: espacamento.md, alignItems: 'center' },
-  botaoVoltar: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    alignSelf: 'flex-start', marginBottom: espacamento.lg,
-  },
-  textoVoltar: { fontSize: 16, color: cores.texto },
-  icone: {
-    width: 88, height: 88, borderRadius: 44,
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: espacamento.md,
-  },
-  descricao: { fontSize: 22, fontWeight: 'bold', color: cores.texto, marginBottom: 4 },
-  valor: { fontSize: 32, fontWeight: '800', marginBottom: espacamento.lg },
-  tabela: {
-    width: '100%', backgroundColor: cores.cartao,
-    borderRadius: raio.md, padding: espacamento.md, gap: 12,
-  },
-  linha: { flexDirection: 'row', justifyContent: 'space-between' },
-  rotulo: { fontSize: 14, color: cores.subtexto },
-  dado: { fontSize: 14, fontWeight: '600', color: cores.texto },
-});
-```
-
----
-
-### 8.2 — Crie `routes/DashboardStack.js`
-
-Este arquivo envolve o Dashboard em um Stack, permitindo empilhar a tela de detalhe sobre ele.
-
-```jsx
-// routes/DashboardStack.js
-import React from 'react';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { DashboardScreen } from '../screens/DashboardScreen';
-import { DetalheTransacaoScreen } from '../screens/DetalheTransacaoScreen';
-
-const Stack = createNativeStackNavigator();
-
-export function DashboardStack() {
+  // Renderiza o Dashboard: cabeçalho, cartão de saldo, resumo, cotações do dia e lista de transações
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="DashboardHome" component={DashboardScreen} />
-      <Stack.Screen name="DetalheTransacao" component={DetalheTransacaoScreen} />
-    </Stack.Navigator>
-  );
-}
-```
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={styles.cabecalho}>
+          <Text style={styles.titulo}>Minhas Finanças</Text>
+          <Text style={styles.subtitulo}>
+            {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+          </Text>
+        </View>
 
----
+        <CartaoSaldo
+          saldo={saldo}
+          mes={new Date().toLocaleDateString('pt-BR', { month: 'long' })}
+        />
 
-### 8.3 — Como o Stack se conecta com o resto do app
+        <CardsResumo receitas={receitas} despesas={despesas} />
 
-Os arquivos do Passo 6 e do Passo 4 já foram preparados para esta integração:
+        <CartaoCotacoes />
 
-- **`routes/TabRoutes.js`** já importa `DashboardStack` (em vez de `DashboardScreen`) e o usa como `component` da aba Dashboard. Assim, quando o usuário toca em uma transação, o Stack consegue empilhar a `DetalheTransacaoScreen` por cima.
-- **`screens/DashboardScreen.js`** já chama `navigation.navigate('DetalheTransacao', { transacao: t })` no `onPress` do `ItemTransacao`, passando a transação inteira como parâmetro. Na `DetalheTransacaoScreen`, esse objeto é lido com `route.params.transacao`.
-- **`screens/NovaTransacaoScreen.js`** já usa o formato aninhado `navigation.navigate('Dashboard', { screen: 'DashboardHome', params: { novaTransacao } })`. Como `Dashboard` agora é um **Stack**, os parâmetros precisam ser direcionados ao screen interno `DashboardHome` — caso contrário ficam no nível do Stack e a lista do Dashboard não atualiza ao salvar.
+        <View style={styles.secao}>
+          <Text style={styles.tituloSecao}>Transações Recentes</Text>
 
-> **Como funciona a passagem de parâmetros:**
-> - `navigation.navigate('NomeDaTela', { chave: valor })` — envia os dados
-> - `route.params.chave` — recebe os dados na tela de destino
-> - O objeto pode ter qualquer estrutura: strings, números, objetos inteiros
-
-> **Por que a estrutura `{ screen, params }`?** É o formato padrão do React Navigation para alcançar um screen aninhado dentro de outro navigator. `screen` é o nome do screen interno e `params` é o objeto que chega em `route.params` daquele screen.
-
----
-
-## Passo 9 — Navegação Condicional: Tela de Boas-vindas
-
-A **navegação condicional** exibe telas diferentes dependendo do estado do app — o padrão mais comum é mostrar uma tela de boas-vindas no primeiro acesso.
-
-### 9.1 — Crie `screens/BoasVindasScreen.js`
-
-```jsx
-// screens/BoasVindasScreen.js
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { cores, espacamento, raio } from '../theme';
-
-export function BoasVindasScreen({ onConcluir }) {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Ionicons name="wallet" size={80} color={cores.receita} />
-        <Text style={styles.titulo}>Bem-vindo ao{'\n'}Minhas Finanças!</Text>
-        <Text style={styles.subtitulo}>
-          Controle suas receitas e despesas de forma simples e rápida.
-        </Text>
-
-        <View style={styles.recursos}>
-          {[
-            { icone: 'add-circle-outline', texto: 'Registre receitas e despesas' },
-            { icone: 'stats-chart-outline', texto: 'Veja seu saldo em tempo real' },
-            { icone: 'save-outline', texto: 'Dados salvos no seu dispositivo' },
-          ].map((item, i) => (
-            <View key={i} style={styles.recurso}>
-              <Ionicons name={item.icone} size={22} color={cores.primaria} />
-              <Text style={styles.textoRecurso}>{item.texto}</Text>
+          {transacoes.length === 0 ? (
+            <View style={styles.vazio}>
+              <Ionicons name="wallet-outline" size={64} color="#bdc3c7" />
+              <Text style={styles.textoVazio}>Nenhuma transação ainda</Text>
+              <Text style={styles.subtextoVazio}>
+                Toque em "Nova Transação" para começar
+              </Text>
             </View>
-          ))}
+          ) : (
+            transacoes.map(t => (
+              <ItemTransacao
+                key={t.id}
+                descricao={t.descricao}
+                valor={t.valor}
+                tipo={t.tipo}
+                categoria={t.categoria}
+                data={t.data}
+                // Navega para o detalhe (DetalheTransacaoScreen criada na Aula 3)
+                onPress={() => navigation.navigate('DetalheTransacao', { transacao: t })}
+                onLongPress={() => confirmarExclusao(t.id, t.descricao)}
+              />
+            ))
+          )}
         </View>
-
-        <TouchableOpacity style={styles.botao} onPress={onConcluir} activeOpacity={0.8}>
-          <Text style={styles.textoBotao}>Começar</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: cores.fundo },
-  container: {
-    flex: 1, padding: espacamento.md,
-    justifyContent: 'center', alignItems: 'center', gap: 16,
+  safeArea: { flex: 1, backgroundColor: cores.primaria },
+  scroll: { flex: 1, backgroundColor: cores.fundo },
+  centralizador: {
+    flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: cores.fundo,
   },
-  titulo: {
-    fontSize: 28, fontWeight: 'bold', color: cores.texto,
-    textAlign: 'center', lineHeight: 36,
+  textoCarregando: { marginTop: 12, color: cores.subtexto, fontSize: 14 },
+  cabecalho: {
+    backgroundColor: cores.primaria,
+    paddingHorizontal: espacamento.md,
+    paddingVertical: espacamento.lg,
   },
-  subtitulo: { fontSize: 15, color: cores.subtexto, textAlign: 'center', lineHeight: 22 },
-  recursos: { gap: 12, marginVertical: 8 },
-  recurso: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  textoRecurso: { fontSize: 15, color: cores.texto },
-  botao: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: cores.primaria, paddingVertical: 14,
-    paddingHorizontal: 32, borderRadius: raio.pill, marginTop: 8,
-  },
-  textoBotao: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  titulo: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  subtitulo: { color: '#bdc3c7', fontSize: 14, marginTop: 2, textTransform: 'capitalize' },
+  secao: { padding: espacamento.md },
+  tituloSecao: { fontSize: 17, fontWeight: '700', color: cores.texto, marginBottom: espacamento.md },
+  vazio: { alignItems: 'center', paddingVertical: 48, gap: 8 },
+  textoVazio: { fontSize: 17, fontWeight: '600', color: cores.subtexto },
+  subtextoVazio: { fontSize: 13, color: '#bdc3c7', textAlign: 'center' },
 });
 ```
 
-### 9.2 — Como o App.js usa a tela de boas-vindas
+---
 
-O `App.js` do Passo 7 já contém toda a lógica condicional pronta:
+### 9.5 — Testar
 
-- importa `BoasVindasScreen` de `./screens/BoasVindasScreen`;
-- mantém o estado `primeiroAcesso` (iniciado em `true`);
-- se `primeiroAcesso === true`, renderiza `<BoasVindasScreen onConcluir={...} />` fora do `NavigationContainer`;
-- ao receber `onConcluir`, chama `setPrimeiroAcesso(false)` e troca para o app principal (`NavigationContainer` + `TabRoutes`).
-
-Assim, basta criar o arquivo `screens/BoasVindasScreen.js` (Passo 9.1) — não é necessário mexer no `App.js`.
-
-> **Como funciona:** o estado `primeiroAcesso` controla qual "árvore" de componentes é renderizada. Quando o usuário toca em "Começar", `setPrimeiroAcesso(false)` troca para o app principal. Em produção, esse estado seria persistido no AsyncStorage para não mostrar a tela toda vez que o app abrir.
+1. Salve todos os arquivos e aguarde o Expo recarregar
+2. O Dashboard deve exibir um card "Cotações do Dia" com os valores atuais de Dólar e Euro
+3. Toque no ícone de refresh (↻) para buscar os valores mais recentes
+4. Desative o Wi-Fi e recarregue — o card deve exibir a mensagem de erro
 
 ---
 
 ## Resultado Final
 
-| Funcionalidade | Como foi feita |
-|----------------|----------------|
-| Barra de abas | `createBottomTabNavigator` |
-| Ícones nas abas | `tabBarIcon` + `Ionicons` |
-| Aba Sobre | `SobreScreen` como 4ª aba |
-| Formulário de transação | `TextInput` + `useState` |
-| Salvando e voltando | `navigation.navigate()` com parâmetros |
-| Recebendo dados | `route.params` |
-| Tela de detalhe | `createNativeStackNavigator` dentro de uma aba |
-| Passagem de parâmetros | `navigate('Tela', { dado })` → `route.params.dado` |
-| Navegação condicional | Estado no `App.js` controla qual navigator renderizar |
+| Funcionalidade | Status |
+|----------------|--------|
+| Transações persistem ao fechar o app | ✅ AsyncStorage |
+| Formulário salva de verdade | ✅ `adicionarTransacao()` |
+| Excluir com toque longo | ✅ `onLongPress` + `removerTransacao()` |
+| Saldo calculado dinamicamente | ✅ `reduce()` no contexto |
+| Loading enquanto carrega | ✅ `ActivityIndicator` |
+| Tela vazia motivacional | ✅ Empty state |
+| Estado compartilhado entre telas | ✅ Context API |
+| Cotações do dia via API externa | ✅ `fetch` + AwesomeAPI |
 
 ---
 
 ## Resolução de Problemas
 
-### "Unable to resolve module @react-navigation/..."
-Reinstale todos os pacotes de navegação do Passo 1.2:
+### "Cannot find module @react-native-async-storage/async-storage"
 ```bash
-npm install @react-navigation/native
-npx expo install react-native-screens react-native-safe-area-context
-npm install @react-navigation/bottom-tabs
-npm install @react-navigation/native-stack
+npx expo install @react-native-async-storage/async-storage
 ```
-Em seguida, derrube o Metro (Ctrl+C no terminal do Expo) e rode `npx expo start -c` para limpar o cache.
+Reinicie o servidor: pressione `r` no terminal do Expo.
 
-### Aparece uma faixa azul acima da barra de abas (só no celular)
-Acontece quando o `SafeAreaView` do `DashboardScreen` está com fundo azul (`cores.primaria`) e aplica `padding` também na borda inferior. No Android, esse padding vira uma faixa colorida acima do tab bar. Limite a safe area só ao topo:
+### "useTransacoes precisa estar dentro de TransacoesProvider"
+Verifique se o `<TransacoesProvider>` envolve o `<NavigationContainer>` no `App.js`.
+
+### Os dados somem ao fechar o app
+Confirme que `await AsyncStorage.setItem(...)` está sendo chamado tanto em `adicionarTransacao` quanto em `removerTransacao`.
+
+### O saldo não atualiza após adicionar transação
+O saldo é calculado com `reduce()` diretamente do array `transacoes`. Se o array atualizar, o saldo atualiza automaticamente. Certifique-se de que `setTransacoes(atualizadas)` é chamado com o array completo.
+
+### "JSON.parse: unexpected character"
+Isso acontece se o AsyncStorage tiver um valor corrompido. Para limpar durante o desenvolvimento:
 ```jsx
-<SafeAreaView style={styles.safeArea} edges={['top']}>
-```
-A borda inferior é cuidada automaticamente pelo Tab Navigator.
-
-### Ícones do status bar (relógio, sinal, bateria) ilegíveis no Dashboard
-No Android, esses ícones são pretos por padrão e somem sobre o cabeçalho azul. Use `useFocusEffect` no `DashboardScreen` para deixá-los claros enquanto a tela está em foco e voltar ao escuro quando o usuário troca de aba:
-```jsx
-import { useFocusEffect } from '@react-navigation/native';
-import { setStatusBarStyle } from 'expo-status-bar';
-
-useFocusEffect(
-  React.useCallback(() => {
-    setStatusBarStyle('light');
-    return () => setStatusBarStyle('dark');
-  }, [])
-);
+await AsyncStorage.removeItem('@minhasfinancas:transacoes');
 ```
 
-### A nova transação não aparece no Dashboard ao voltar
-Duas causas possíveis:
+### O card de cotações mostra "Não foi possível carregar"
+Verifique sua conexão com a internet. A AwesomeAPI é um serviço externo e requer rede ativa. No emulador Android, confirme que o acesso à internet está habilitado nas configurações do emulador. Toque no ícone ↻ para tentar novamente.
 
-**1) O `useEffect` não está observando `route.params?.novaTransacao`** no `DashboardScreen`:
-
+### As cotações não atualizam automaticamente
+O hook `useCotacoes` busca os dados uma única vez ao montar o componente (`useEffect` com array vazio `[]`). Para atualização automática a cada X minutos, adicione um `setInterval` dentro do `useEffect`:
 ```jsx
 useEffect(() => {
-  if (route.params?.novaTransacao) {
-    setTransacoes(prev => [route.params.novaTransacao, ...prev]);
-  }
-}, [route.params?.novaTransacao]);
+  buscarCotacoes();
+  const intervalo = setInterval(buscarCotacoes, 5 * 60 * 1000); // a cada 5 min
+  return () => clearInterval(intervalo); // limpa ao desmontar
+}, []);
 ```
-
-**2) O `salvar` da `NovaTransacaoScreen` está usando o formato direto** em vez do aninhado. Como `Dashboard` é um Stack (e não um screen direto), os parâmetros precisam alcançar o screen interno `DashboardHome` (veja Passo 8.3):
-```jsx
-navigation.navigate('Dashboard', {
-  screen: 'DashboardHome',
-  params: { novaTransacao },
-});
-```
-
-### O teclado cobre os campos no formulário
-Substitua `<ScrollView>` por `<KeyboardAvoidingView>`:
-```jsx
-import { KeyboardAvoidingView, Platform } from 'react-native';
-
-<KeyboardAvoidingView
-  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-  style={{ flex: 1 }}
->
-```
-
-### O app fecha ao navegar
-Certifique-se de que `NavigationContainer` está no nível mais alto do `App.js`, fora de qualquer outro componente.
-
-### Tela em branco ao abrir o app
-Verifique se no `DashboardScreen.js` o `import React from 'react'` está no topo do arquivo. Sem esse import, `React.useState` e `React.useEffect` ficam undefined e o app não renderiza nada. Os logs no navegador também pode oferecer pistas sobre o problema.
-
-### `route.params` está `undefined` na tela de detalhe
-Confirme que você está passando os parâmetros no `navigate`:
-```jsx
-navigation.navigate('DetalheTransacao', { transacao: t })
-//                   ↑ nome exato da Screen  ↑ objeto com os dados
-```
-E que o nome da Screen no Stack corresponde exatamente ao que foi usado no `navigate`.
-
