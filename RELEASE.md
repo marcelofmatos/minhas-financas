@@ -36,7 +36,7 @@ A Aula 05 **adicionou funcionalidades** ao projeto sem quebrar a estrutura entre
 
 - A navegação por Drawer + Tabs e todas as telas (`Dashboard`, `NovaTransacao`, `Relatorio`, `Sobre`) continuam funcionando ✅
 - O contrato público do `useTransacoes` (`transacoes`, `saldo`, `receitas`, `despesas`, `adicionarTransacao`, `removerTransacao`) **permanece o mesmo** — quem consome o hook não precisa mudar nada ✅
-- A `BoasVindasScreen` voltou ao app, agora controlada por contexto persistente em vez de `useState` em memória ✅
+- A `BoasVindasScreen` está nesta versão agora controlada por contexto persistente em vez de `useState` em memória ✅
 - Quem clonou na `1.3.0` consegue dar `git pull` na `1.4.0` e rodar `npm install` para ter o banco SQLite e o controle de primeiro acesso ✅
 
 Como **adicionamos features compatíveis** (banco local com SQLite, contexto de primeiro acesso persistido e suporte a `.wasm` no bundler para o web), incrementamos o **MINOR** (`1.3.0` → `1.4.0`) e zeramos o PATCH.
