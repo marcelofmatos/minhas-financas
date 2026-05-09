@@ -44,7 +44,6 @@ const styles = StyleSheet.create({
     borderRadius: raio.md,
     padding: espacamento.md,
     marginHorizontal: espacamento.md,
-    marginBottom: espacamento.md,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },

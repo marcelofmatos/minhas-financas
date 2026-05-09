@@ -13,7 +13,7 @@ export function RelatorioScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <Text style={styles.titulo}>Relatório — Abril 2026</Text>
+        <Text style={styles.titulo}>Relatório — Maio 2026</Text>
 
         <View style={styles.barra}>
           <View style={[styles.segmento, {

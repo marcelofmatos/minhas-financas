@@ -24,7 +24,6 @@ const styles = StyleSheet.create({
     borderRadius: raio.lg,
     padding: espacamento.lg,
     marginHorizontal: espacamento.md,
-    marginTop: espacamento.md,
     alignItems: 'center',
   },
   label: {

@@ -5,6 +5,8 @@ import {
   ActivityIndicator, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { setStatusBarStyle } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { CartaoSaldo } from '../components/CartaoSaldo';
 import { CardsResumo } from '../components/CardsResumo';
@@ -15,6 +17,14 @@ import { CartaoCotacoes } from '../components/CartaoCotacoes';
 
 export function DashboardScreen({ navigation, route }) {
   const { transacoes, saldo, receitas, despesas, carregando, removerTransacao } = useTransacoes();
+
+  // Status bar claro enquanto o Dashboard está em foco (cabeçalho azul)
+  useFocusEffect(
+    React.useCallback(() => {
+      setStatusBarStyle('light');
+      return () => setStatusBarStyle('dark');
+    }, [])
+  );
 
   function confirmarExclusao(id, descricao) {
     Alert.alert(
@@ -38,9 +48,8 @@ export function DashboardScreen({ navigation, route }) {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Cabeçalho */}
         <View style={styles.cabecalho}>
           <Text style={styles.titulo}>Minhas Finanças</Text>
           <Text style={styles.subtitulo}>
@@ -48,23 +57,20 @@ export function DashboardScreen({ navigation, route }) {
           </Text>
         </View>
 
-        {/* Saldo */}
-        <CartaoSaldo
-          saldo={saldo}
-          mes={new Date().toLocaleDateString('pt-BR', { month: 'long' })}
-        />
+        <View style={styles.cards}>
+          <CartaoSaldo
+            saldo={saldo}
+            mes={new Date().toLocaleDateString('pt-BR', { month: 'long' })}
+          />
 
-        {/* Resumo */}
-        <CardsResumo receitas={receitas} despesas={despesas} />
-        
-        {/* Cotações */}
-        <CartaoCotacoes />
+          <CardsResumo receitas={receitas} despesas={despesas} />
 
-        {/* Lista */}
+          <CartaoCotacoes />
+        </View>
+
         <View style={styles.secao}>
           <Text style={styles.tituloSecao}>Transações Recentes</Text>
 
-          {/* Tela vazia */}
           {transacoes.length === 0 ? (
             <View style={styles.vazio}>
               <Ionicons name="wallet-outline" size={64} color="#bdc3c7" />
@@ -107,6 +113,7 @@ const styles = StyleSheet.create({
   },
   titulo: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
   subtitulo: { color: '#bdc3c7', fontSize: 14, marginTop: 2, textTransform: 'capitalize' },
+  cards: { gap: espacamento.md, paddingTop: espacamento.md },
   secao: { padding: espacamento.md },
   tituloSecao: { fontSize: 17, fontWeight: '700', color: cores.texto, marginBottom: espacamento.md },
   vazio: { alignItems: 'center', paddingVertical: 48, gap: 8 },

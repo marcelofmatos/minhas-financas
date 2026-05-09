@@ -30,7 +30,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',   // coloca os cards lado a lado
     gap: 12,
     marginHorizontal: espacamento.md,
-    marginTop: espacamento.md,
   },
   card: {
     flex: 1,               // cada card ocupa metade da largura

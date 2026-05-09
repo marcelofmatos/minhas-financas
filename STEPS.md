@@ -1,117 +1,299 @@
-# Passo a Passo — Tornando o minhas-financas Funcional com AsyncStorage
+# Passo a Passo — Armazenamento com SQLite
 
-**Módulo 06 — Aula 04**  
+**Módulo 06 — Aula 05**  
 Prof. Marcelo Matos
 
-> Continue com o projeto `minhas-financas` da Aula 3. Esta aula transforma o app de demonstração em um app real com dados que persistem.
+> Continue com o projeto `minhas-financas`. Vamos substituir o AsyncStorage por SQLite — um banco de dados relacional que roda direto no dispositivo. A aula funciona em **celular, emulador e Expo Web** — para o web é preciso configurar o `metro.config.js` (Passo 2.2).
 
 ---
 
 ## O que você vai construir
 
-Ao final deste tutorial, o app **minhas-financas** será totalmente funcional:
+Ao final deste tutorial, o app terá:
 
-- Transações salvas no dispositivo — **não somem ao fechar o app**
-- Formulário da Aula 3 **realmente adiciona** transações à lista
-- **Toque longo** em uma transação para excluí-la (com confirmação)
-- **Spinner de carregamento** enquanto os dados são lidos do armazenamento
-- **Tela vazia** com instrução quando não há transações
-- Saldo, receitas e despesas **calculados dinamicamente**
+- Banco de dados SQLite criado automaticamente no primeiro acesso
+- Transações salvas em uma tabela SQL (`transacoes`)
+- Operações de INSERT, SELECT e DELETE usando SQL
+- Migração transparente do AsyncStorage para SQLite
+- Tela de boas-vindas só na primeira abertura, com flag persistida em AsyncStorage
+- Botão **Excluir** na tela de detalhe da transação, com confirmação via Alert nativo
+
+---
+
+## AsyncStorage × SQLite — Quando usar cada um?
+
+| | AsyncStorage | SQLite |
+|---|---|---|
+| Estrutura | Chave-valor (como um dicionário) | Tabelas com colunas (como planilha) |
+| Consultas | Busca toda a lista, filtra no JS | Filtra diretamente no banco (`WHERE`, `ORDER BY`) |
+| Performance | Boa para poucos dados | Melhor para muitos registros |
+| Ideal para | Preferências, configurações, listas pequenas | Histórico longo, filtros complexos, dados relacionais |
+| Exemplo | `{ "transacoes": "[...]" }` | `SELECT * FROM transacoes WHERE tipo = 'despesa'` |
+
+### Critérios detalhados
+
+| Critério | Manter AsyncStorage | Trocar para SQLite |
+|---|---|---|
+| Tipo de dado | Preferências simples, flags, token, tema, pequenos valores em chave-valor | Dados estruturados, múltiplas tabelas, relacionamentos, histórico, filas locais |
+| Volume de dados | Poucos dados, leitura e escrita ocasionais | Volume crescente, muitos registros ou necessidade de persistência local mais organizada |
+| Consultas | Buscar por chave direta, sem filtros complexos | Filtrar, ordenar, paginar, fazer agregações e joins |
+| Concorrência | Poucas operações simples e isoladas | Mais escrita/leituras concorrentes e necessidade de consistência local |
+| Offline-first | Apenas guardar estado básico do usuário | Cache offline, sincronização posterior e dados locais mais completos |
+| Evolução do produto | App pequeno, sem crescimento forte de regras de dados | App crescendo em complexidade, com modelo de dados mais estável |
+| Manutenção | Menos código e menos estrutura | Mais trabalho inicial, mas melhor organização para dados reais do app |
+
+### Quando trocar para SQLite
+
+Vale trocar para SQLite quando o armazenamento começa a ter pelo menos um destes sinais: você precisa consultar dados por vários critérios, guardar listas grandes, manter consistência local, ou suportar modo offline com dados estruturados. Outro sinal forte é quando o AsyncStorage começa a virar uma "base improvisada" com muitos JSONs, porque aí o custo de manter e evoluir cresce rápido.
+
+### Quando manter AsyncStorage
+
+Se o app só salva tema, idioma, token, onboarding e poucas preferências, AsyncStorage continua suficiente. Também não compensa migrar para SQLite só por "parecer mais profissional", porque isso adiciona schema, migração e mais código sem necessidade prática.
+
+### Regra prática
+
+Se você está usando o armazenamento como **configuração**, fique com AsyncStorage; se está usando como **banco local**, vá para SQLite. Em apps mobile, SQLite é o caminho natural quando os dados precisam ser estruturados, pesquisáveis e preparados para crescer.
+
+**Exemplos:**
+
+- **AsyncStorage:** salvar `theme = dark`, `language = pt-BR`, `hasSeenIntro = true`
+- **SQLite:** salvar usuários, pedidos, tarefas, mensagens, cache de catálogo e relações entre entidades
+
+> **No `minhas-financas`:** a flag de primeiro acesso é configuração (AsyncStorage), e a lista de transações é banco local (SQLite). Por isso convivem os dois — cada armazenamento na sua função.
+
+---
+
+## Onde o SQLite aparece em apps reais
+
+O SQLite é o banco de dados mais usado no mundo — está dentro de **todo iPhone, todo Android, todos os principais navegadores e na maioria dos apps móveis**. Ver exemplos do dia a dia ajuda a entender que o que você está aprendendo aqui é exatamente o mesmo padrão usado por apps de milhões de usuários.
+
+### Padrões comuns de uso em apps móveis
+
+| Padrão | Exemplo prático | Por que SQLite |
+|---|---|---|
+| **Histórico de mensagens** | WhatsApp, Telegram, Signal armazenam todas as conversas localmente | Volume alto, busca rápida por contato/data |
+| **Cache offline de dados do servidor** | Instagram e Twitter mostram o feed mesmo sem rede | Permite filtrar e ordenar sem nova requisição |
+| **Conteúdo baixado para offline** | Spotify, YouTube Music, Netflix gerenciam o que está disponível sem internet | Relaciona arquivos, metadados, expiração |
+| **Histórico de atividade** | Strava, Nike Run, Apple Saúde guardam treinos, rotas, métricas | Consultas por período, agregações (`SUM`, `AVG`) |
+| **Notas e produtividade** | Apple Notes, Google Keep, Notion guardam textos e metadados | Busca por título, tags, data |
+| **Histórico do navegador** | Chrome, Safari, Firefox usam SQLite para histórico, favoritos e cookies | Milhões de registros com busca instantânea |
+| **Carrinho e lista de desejos** | Shopee, Amazon, Mercado Livre lembram itens entre sessões | Dados estruturados que sobrevivem ao logout |
+| **Fila de sincronização** | Apps offline-first guardam ações para enviar quando voltar a internet | Marca registros como "pendente" via coluna de status |
+| **Saves de jogos** | A maioria dos jogos mobile guarda progresso, conquistas e configurações | Robusto, transacional, sem servidor |
+
+### Por que tantos apps escolhem SQLite
+
+- **Está embutido no sistema operacional** — Android e iOS já incluem o SQLite, então não há dependência extra para o usuário baixar
+- **Funciona offline por padrão** — não precisa de servidor, ideal para apps que precisam continuar usáveis sem rede
+- **Lida com volume real** — milhares ou milhões de registros sem perder performance, desde que existam índices apropriados
+- **Suporta consultas complexas** — `WHERE`, `JOIN`, `GROUP BY`, `SUM` resolvem no banco o que seria caro em JavaScript
+- **Padrão SQL universal** — o que você aprende aqui vale para PostgreSQL, MySQL, SQL Server e qualquer banco relacional
+
+> **Onde o `minhas-financas` se encaixa nisso?** O app combina dois padrões clássicos: **histórico de atividade** (a tabela `transacoes` cresce com o tempo) e **agregações** (somar receitas e despesas). Esse é o cenário típico em que SQLite brilha — exatamente o mesmo desenho usado por apps de fitness, bancos digitais e ferramentas de produtividade.
 
 ---
 
 ## Antes de Começar — Checklist
 
-- [ ] Projeto `minhas-financas` das Aulas 2 e 3 funcionando
-- [ ] App com Tab Navigator (Dashboard / Nova Transação / Relatório)
-- [ ] Expo Go no celular (ou emulador Android)
+- [ ] Projeto `minhas-financas` das Aulas 2, 3 e 4 funcionando
+- [ ] AsyncStorage funcionando (aula 4)
 - [ ] Terminal aberto na pasta `minhas-financas`
 
 ---
 
-## Passo 1 — Instalar o AsyncStorage
-
-### 1.1 — No terminal, execute:
+## Passo 1 — Instalar o expo-sqlite
 
 ```bash
-npx expo install @react-native-async-storage/async-storage
+npx expo install expo-sqlite
 ```
 
-> Use `npx expo install` (não `npm install`) para garantir que a versão seja compatível com a versão do Expo que você está usando.
-
-### 1.2 — Verifique se apareceu no package.json
-
-Deve aparecer: `"@react-native-async-storage/async-storage": "x.x.x"`
+> Use `npx expo install` para garantir compatibilidade com sua versão do Expo.
 
 ---
 
-## Passo 2 — Criar a pasta de contexto
+## Passo 2 — Criar o helper do banco de dados
+
+### 2.1 — Crie `database/db.js`
 
 ```bash
-mkdir context
+mkdir database
 ```
+
+```jsx
+// database/db.js
+import * as SQLite from 'expo-sqlite';
+
+let db;
+
+// Cria a tabela se ainda não existir
+export async function inicializarBanco() {
+  db = await SQLite.openDatabaseAsync('minhasfinancas.db');
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS transacoes (
+      id        TEXT PRIMARY KEY,
+      descricao TEXT NOT NULL,
+      valor     REAL NOT NULL,
+      tipo      TEXT NOT NULL,
+      categoria TEXT NOT NULL,
+      data      TEXT NOT NULL
+    );
+  `);
+}
+
+// Retorna todas as transações, mais recentes primeiro
+export async function buscarTodasTransacoes() {
+  return await db.getAllAsync(
+    'SELECT * FROM transacoes ORDER BY rowid DESC'
+  );
+}
+
+// Insere uma nova transação
+export async function inserirTransacao(t) {
+  await db.runAsync(
+    'INSERT INTO transacoes (id, descricao, valor, tipo, categoria, data) VALUES (?, ?, ?, ?, ?, ?)',
+    [t.id, t.descricao, t.valor, t.tipo, t.categoria, t.data]
+  );
+}
+
+// Remove uma transação pelo id
+export async function excluirTransacao(id) {
+  await db.runAsync('DELETE FROM transacoes WHERE id = ?', [id]);
+}
+
+// ---------------------------------------------------------------------------
+// Bônus — STEPS.md Passo 4.2 (debug opcional)
+// Descomente temporariamente para inspecionar o conteúdo da tabela no console.
+// ---------------------------------------------------------------------------
+// export async function logTransacoes() {
+//   const dados = await db.getAllAsync('SELECT * FROM transacoes');
+//   console.log('Transações no banco:', JSON.stringify(dados, null, 2));
+// }
+
+// ---------------------------------------------------------------------------
+// Bônus — STEPS.md Passo 5 (consultas avançadas com SQL)
+// Demonstram o poder do SQL para filtrar diretamente no banco, sem trazer
+// tudo para o JavaScript. Não são usadas na tela ainda — descomente quando
+// for consumir em algum componente.
+// ---------------------------------------------------------------------------
+
+// Busca apenas despesas de uma categoria
+// export async function buscarPorCategoria(categoria) {
+//   return await db.getAllAsync(
+//     'SELECT * FROM transacoes WHERE categoria = ? ORDER BY rowid DESC',
+//     [categoria]
+//   );
+// }
+
+// Soma total por tipo
+// export async function totalPorTipo(tipo) {
+//   const resultado = await db.getFirstAsync(
+//     'SELECT SUM(valor) as total FROM transacoes WHERE tipo = ?',
+//     [tipo]
+//   );
+//   return resultado?.total ?? 0;
+// }
+
+// Busca transações de um período
+// export async function buscarPorPeriodo(dataInicio, dataFim) {
+//   return await db.getAllAsync(
+//     'SELECT * FROM transacoes WHERE data BETWEEN ? AND ? ORDER BY data DESC',
+//     [dataInicio, dataFim]
+//   );
+// }
+```
+
+> **Por que `async/await`?** A API moderna do `expo-sqlite` (`openDatabaseAsync`, `execAsync`, `runAsync`, `getAllAsync`) é assíncrona — o banco roda em uma thread separada e não trava a UI. Por isso a `db` só fica disponível **depois** que `inicializarBanco()` terminar; nas demais funções confiamos que o `useEffect` do contexto já chamou esse passo antes.
+
+**Explicando o SQL:**
+
+| Comando | O que faz |
+|---------|-----------|
+| `CREATE TABLE IF NOT EXISTS` | Cria a tabela só se ela ainda não existir |
+| `TEXT`, `REAL` | Tipos de coluna: texto e número decimal |
+| `PRIMARY KEY` | Garante que o `id` é único |
+| `SELECT * FROM ... ORDER BY rowid DESC` | Busca tudo, mais recentes primeiro |
+| `INSERT INTO ... VALUES (?, ?, ...)` | Os `?` são substituídos pelos valores do array |
+| `DELETE FROM ... WHERE id = ?` | Remove apenas a linha com aquele id |
+| `UPDATE ... SET coluna = ? WHERE id = ?` | Modifica colunas de uma linha existente (ver **Referência Rápida — R1**) |
+
+### 2.2 — Configurar o Metro para o Expo Web
+
+No celular e no emulador o `expo-sqlite` já funciona com o que fizemos até aqui. **Para rodar também no Expo Web é preciso um passo extra**: o navegador executa o SQLite compilado em **WebAssembly** (`.wasm`), e o Metro (o bundler do Expo) não reconhece esse tipo de arquivo por padrão. Sem essa configuração, o app quebra ao abrir no `localhost:8082` com erros como **"Unable to resolve ./wa-sqlite/wa-sqlite.wasm"** ou **"SharedArrayBuffer is not defined"**.
+
+Crie o arquivo `metro.config.js` na **raiz do projeto** (mesma pasta do `App.js` e do `package.json`):
+
+```js
+// metro.config.js
+const { getDefaultConfig } = require('expo/metro-config');
+
+const config = getDefaultConfig(__dirname);
+config.resolver.assetExts.push('wasm');   // permite servir o .wasm como asset
+config.resolver.sourceExts.push('wasm');  // permite o bundler resolver `import` de .wasm
+
+module.exports = config;
+```
+
+Pare o servidor (`Ctrl + C`) e reinicie com `npx expo start`. Em seguida pressione `w` para abrir no navegador.
+
+> **Por que duas linhas?** `assetExts` registra `.wasm` como **asset estático** — para o Metro empacotar e servir o arquivo. `sourceExts` registra `.wasm` como **extensão resolvível pelo bundler** — sem isso, o `import` interno do `expo-sqlite` para `wa-sqlite.wasm` falha na resolução. As duas linhas atuam em camadas diferentes do Metro e ambas são necessárias.
+
+> **E no celular?** Esse arquivo não atrapalha Android nem iOS — o `.wasm` simplesmente não é usado fora do navegador. Ou seja: o mesmo `database/db.js` roda nos três ambientes (Android, iOS, Web), mudando apenas a configuração do Metro.
 
 ---
 
-## Passo 3 — Criar o TransacoesContext
+## Passo 3 — Atualizar o TransacoesContext
 
-Este arquivo é o coração do app nesta aula. Ele gerencia todo o estado de transações e a persistência com AsyncStorage.
+Substitua o uso de AsyncStorage pelo SQLite no contexto.
 
-### 3.1 — Crie `context/TransacoesContext.js`
+### 3.1 — Substitua o conteúdo completo de `context/TransacoesContext.js`
+
+> ⚠️ **Atenção:** copie e cole o arquivo inteiro abaixo.
 
 ```jsx
 // context/TransacoesContext.js
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  inicializarBanco,
+  buscarTodasTransacoes,
+  inserirTransacao,
+  excluirTransacao,
+} from '../database/db';
 
-// Chave usada para salvar no AsyncStorage
-// Prefixo '@minhasfinancas:' evita conflito com outros apps
-const CHAVE_STORAGE = '@minhasfinancas:transacoes';
-
-// 1. Criamos o contexto vazio
 const TransacoesContext = createContext(null);
 
-// 2. O Provider é o componente que envolve o app e disponibiliza o estado
 export function TransacoesProvider({ children }) {
   const [transacoes, setTransacoes] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
-  // Executa uma única vez quando o app abre
   useEffect(() => {
-    carregarTransacoes();
+    (async () => {
+      await inicializarBanco();   // cria a tabela se não existir
+      await carregarTransacoes();
+    })();
   }, []);
 
-  // Lê as transações salvas no dispositivo
   async function carregarTransacoes() {
     try {
       setCarregando(true);
-      const json = await AsyncStorage.getItem(CHAVE_STORAGE);
-      if (json !== null) {
-        setTransacoes(JSON.parse(json));
-      }
+      const dados = await buscarTodasTransacoes();
+      setTransacoes(dados);
     } catch (erro) {
       console.error('Erro ao carregar transações:', erro);
     } finally {
-      // "finally" sempre executa, mesmo se der erro
       setCarregando(false);
     }
   }
 
-  // Adiciona uma nova transação e salva no AsyncStorage
   async function adicionarTransacao(novaTransacao) {
-    const atualizadas = [novaTransacao, ...transacoes];
-    setTransacoes(atualizadas);  // atualiza a UI imediatamente
-    await AsyncStorage.setItem(CHAVE_STORAGE, JSON.stringify(atualizadas));
+    await inserirTransacao(novaTransacao);
+    setTransacoes(prev => [novaTransacao, ...prev]);
   }
 
-  // Remove uma transação pelo id e salva no AsyncStorage
   async function removerTransacao(id) {
-    const atualizadas = transacoes.filter(t => t.id !== id);
-    setTransacoes(atualizadas);
-    await AsyncStorage.setItem(CHAVE_STORAGE, JSON.stringify(atualizadas));
+    await excluirTransacao(id);
+    setTransacoes(prev => prev.filter(t => t.id !== id));
   }
 
-  // Calcula os totais a partir do estado atual
   const receitas = transacoes
     .filter(t => t.tipo === 'receita')
     .reduce((soma, t) => soma + t.valor, 0);
@@ -120,7 +302,6 @@ export function TransacoesProvider({ children }) {
     .filter(t => t.tipo === 'despesa')
     .reduce((soma, t) => soma + t.valor, 0);
 
-  // Tudo que o contexto disponibiliza para as telas
   const valor = {
     transacoes,
     carregando,
@@ -138,7 +319,6 @@ export function TransacoesProvider({ children }) {
   );
 }
 
-// 3. Hook customizado — facilita o uso do contexto nas telas
 export function useTransacoes() {
   const contexto = useContext(TransacoesContext);
   if (!contexto) {
@@ -148,531 +328,329 @@ export function useTransacoes() {
 }
 ```
 
-**O que acontece aqui — resumo:**
+**O que mudou em relação à Aula 4:**
 
-| Função | O que faz |
-|--------|-----------|
-| `carregarTransacoes()` | Lê as transações do AsyncStorage ao abrir o app |
-| `adicionarTransacao(t)` | Adiciona ao estado + salva no AsyncStorage |
-| `removerTransacao(id)` | Remove do estado + salva no AsyncStorage |
-| `receitas`, `despesas`, `saldo` | Calculados automaticamente a partir do estado |
+| Antes (AsyncStorage) | Agora (SQLite) |
+|---|---|
+| `await AsyncStorage.getItem(...)` direto na tela | `await buscarTodasTransacoes()` no contexto |
+| `await AsyncStorage.setItem(...)` direto na tela | `await inserirTransacao(t)` no contexto |
+| Salva JSON da lista inteira | Insere/deleta apenas o registro afetado (SQL) |
+| `useEffect` síncrono | `useEffect` com IIFE `async` para esperar `inicializarBanco()` |
+
+> **Por que `async/await`?** A API moderna do `expo-sqlite` (`openDatabaseAsync`, `execAsync`, `runAsync`, `getAllAsync`) é assíncrona — o banco roda em thread separada e não trava a UI. Por isso todas as funções do contexto também são `async`.
+
+> **E o `useEffect`?** Ele não pode ser `async` diretamente. Usamos uma **IIFE (Immediately Invoked Function Expression)**: declaramos `(async () => { ... })()` para criar uma função `async` interna e já chamá-la. É o padrão idiomático do React para usar `await` dentro de `useEffect`.
 
 ---
 
-## Passo 4 — Conectar o Provider ao App.js
+## Passo 4 — Testar a migração
 
-O `TransacoesProvider` precisa envolver todas as telas para que elas possam acessar o contexto.
+Salve todos os arquivos e aguarde o Expo recarregar.
 
-### 4.1 — Atualize o `App.js`
+### 4.1 — Roteiro de teste
+
+1. **Abra o app** → se tinha dados do AsyncStorage, a lista começa vazia (banco SQLite novo)
+2. **Adicione uma transação** → deve aparecer na lista
+3. **Feche e reabra o app** → transação deve continuar lá
+4. **Faça toque longo** → confirme a exclusão — deve sumir da lista
+
+### 4.2 — Verificar o banco via log (opcional)
+
+O bloco já está em `database/db.js` comentado. Descomente temporariamente para inspecionar os dados:
+
+```jsx
+export async function logTransacoes() {
+  const dados = await db.getAllAsync('SELECT * FROM transacoes');
+  console.log('Transações no banco:', JSON.stringify(dados, null, 2));
+}
+```
+
+E chame com `await logTransacoes()` no console ou em algum efeito.
+
+---
+
+## Passo 5 — Consultas avançadas com SQL (bônus)
+
+Uma das vantagens do SQLite é poder filtrar diretamente no banco, sem carregar tudo para o JavaScript.
+
+### 5.1 — Descomente em `database/db.js`
+
+```jsx
+// Busca apenas despesas de uma categoria
+export async function buscarPorCategoria(categoria) {
+  return await db.getAllAsync(
+    'SELECT * FROM transacoes WHERE categoria = ? ORDER BY rowid DESC',
+    [categoria]
+  );
+}
+
+// Soma total por tipo
+export async function totalPorTipo(tipo) {
+  const resultado = await db.getFirstAsync(
+    'SELECT SUM(valor) as total FROM transacoes WHERE tipo = ?',
+    [tipo]
+  );
+  return resultado?.total ?? 0;
+}
+
+// Busca transações de um período
+export async function buscarPorPeriodo(dataInicio, dataFim) {
+  return await db.getAllAsync(
+    'SELECT * FROM transacoes WHERE data BETWEEN ? AND ? ORDER BY data DESC',
+    [dataInicio, dataFim]
+  );
+}
+```
+
+> Essas funções não são usadas na tela agora, mas demonstram o poder do SQL para consultas específicas — algo que o AsyncStorage não oferece.
+
+---
+
+## Passo 6 — Persistir o primeiro acesso com AsyncStorage
+
+Hoje a tela de boas-vindas reaparece toda vez que o app é aberto, porque o estado `primeiroAcesso` vive apenas em memória. Vamos criar um **contexto dedicado** que persiste essa flag no `AsyncStorage` — sem mexer no `TransacoesContext` (que cuida só das transações no SQLite).
+
+### Por que dois contextos e dois armazenamentos?
+
+| Responsabilidade | Contexto | Armazenamento |
+|---|---|---|
+| Lista de transações | `TransacoesContext` | SQLite |
+| Flag de primeiro acesso | `PrimeiroAcessoContext` (novo) | AsyncStorage |
+
+> **Por que AsyncStorage e não SQLite?** A flag é um único booleano que o app lê uma vez ao abrir. Criar uma tabela SQL para isso seria exagero. AsyncStorage (chave-valor) é a ferramenta certa para preferências e flags simples. Esse é um padrão comum: **SQLite para dados relacionais, AsyncStorage para preferências do usuário**.
+
+### 6.1 — Crie `context/PrimeiroAcessoContext.js`
+
+```jsx
+// context/PrimeiroAcessoContext.js
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const CHAVE = '@minhasfinancas:primeiro_acesso_concluido';
+
+const PrimeiroAcessoContext = createContext(null);
+
+export function PrimeiroAcessoProvider({ children }) {
+  const [primeiroAcesso, setPrimeiroAcesso] = useState(true);
+  const [carregando, setCarregando] = useState(true);
+
+  useEffect(() => {
+    AsyncStorage.getItem(CHAVE).then(valor => {
+      if (valor === 'true') setPrimeiroAcesso(false);
+      setCarregando(false);
+    });
+  }, []);
+
+  async function concluir() {
+    await AsyncStorage.setItem(CHAVE, 'true');
+    setPrimeiroAcesso(false);
+  }
+
+  return (
+    <PrimeiroAcessoContext.Provider value={{ primeiroAcesso, carregando, concluir }}>
+      {children}
+    </PrimeiroAcessoContext.Provider>
+  );
+}
+
+export function usePrimeiroAcesso() {
+  const contexto = useContext(PrimeiroAcessoContext);
+  if (!contexto) {
+    throw new Error('usePrimeiroAcesso precisa estar dentro de <PrimeiroAcessoProvider>');
+  }
+  return contexto;
+}
+```
+
+**Como funciona:**
+
+| Estado / função | Papel |
+|---|---|
+| `primeiroAcesso` | Booleano — controla qual árvore o `App.js` renderiza |
+| `carregando` | Verdadeiro até a leitura inicial do AsyncStorage terminar |
+| `useEffect` | Roda uma vez ao montar; lê a chave e desliga o `carregando` |
+| `concluir()` | Grava `'true'` na chave e atualiza o estado — chamado pelo botão "Começar" |
+| `usePrimeiroAcesso()` | Hook que consome o contexto, com guarda de erro se usado fora do Provider |
+
+### 6.2 — Substitua o conteúdo completo de `App.js`
 
 ```jsx
 // App.js
-import React, { useState } from 'react';
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TabRoutes } from './routes/TabRoutes';
 import { TransacoesProvider } from './context/TransacoesContext';
 import { BoasVindasScreen } from './screens/BoasVindasScreen';
+import {
+  PrimeiroAcessoProvider,
+  usePrimeiroAcesso,
+} from './context/PrimeiroAcessoContext';
 
-export default function App() {
-  // Mantém a navegação condicional da Aula 3 (tela de boas-vindas no primeiro acesso)
-  const [primeiroAcesso, setPrimeiroAcesso] = useState(true);
+function ConteudoApp() {
+  const { primeiroAcesso, carregando, concluir } = usePrimeiroAcesso();
+
+  // Enquanto lê o AsyncStorage, evita o flash da tela de boas-vindas
+  if (carregando) return null;
 
   if (primeiroAcesso) {
-    return (
-      <SafeAreaProvider>
-        <BoasVindasScreen onConcluir={() => setPrimeiroAcesso(false)} />
-      </SafeAreaProvider>
-    );
+    return <BoasVindasScreen onConcluir={concluir} />;
   }
 
   return (
+    <TransacoesProvider>
+      <NavigationContainer>
+        <TabRoutes />
+      </NavigationContainer>
+    </TransacoesProvider>
+  );
+}
+
+export default function App() {
+  return (
     <SafeAreaProvider>
-      <TransacoesProvider>
-        <NavigationContainer>
-          <TabRoutes />
-        </NavigationContainer>
-      </TransacoesProvider>
+      <PrimeiroAcessoProvider>
+        <ConteudoApp />
+      </PrimeiroAcessoProvider>
     </SafeAreaProvider>
   );
 }
 ```
 
-> **Lembrete:** o `SafeAreaProvider` (do `react-native-safe-area-context`) já foi instalado na Aula 3 junto com o React Navigation. Mantenha-o no nível mais alto para que o `SafeAreaView` continue funcionando em todas as telas.
+**O que mudou em relação à Aula 4:**
 
-> **Ordem importa:** `TransacoesProvider` precisa estar fora de `NavigationContainer` (ou dentro — ambos funcionam). O que não pode é estar fora do que envolve as telas — as telas precisam estar dentro do Provider. Note que ele só envolve o app principal: a `BoasVindasScreen` da Aula 3 não precisa do contexto de transações.
+| Antes (Aula 4) | Agora (Aula 5) |
+|---|---|
+| `useState(true)` direto no `App.js` | Estado dentro do `PrimeiroAcessoProvider` |
+| Flag perdia o valor ao fechar o app | Persistida no AsyncStorage |
+| Welcome reaparecia toda vez | Aparece só uma vez por instalação |
+| `App.js` tinha toda a lógica | `App.js` só compõe os Providers; `ConteudoApp` decide a árvore |
+
+> **Por que `if (carregando) return null;`?** A primeira leitura do AsyncStorage é assíncrona. Sem o guard, o app começaria com `primeiroAcesso = true` (default), montaria a tela de boas-vindas, e logo depois descobriria que a flag já estava persistida — gerando um "flash" da tela errada. Retornar `null` durante o carregamento mostra a tela em branco rapidamente até a leitura terminar.
+
+> **Por que o `TransacoesProvider` continua só dentro do app principal?** A `BoasVindasScreen` não consome transações. Mantendo o `TransacoesProvider` dentro do `if (primeiroAcesso) { ... }`, o SQLite só é inicializado quando o usuário entra no app de fato.
+
+### 6.3 — Roteiro de teste
+
+1. **Apague o app** do celular/emulador (ou rode com cache limpo via `npx expo start -c`)
+2. Abra → tela de boas-vindas aparece
+3. Toque em **Começar** → vai para o Dashboard
+4. **Feche e reabra** o app → vai direto ao Dashboard, sem boas-vindas ✅
+5. Para repetir o teste, desinstale o app ou limpe os dados do Expo Go
 
 ---
 
-## Passo 5 — Atualizar a DashboardScreen
+## Passo 7 — Botão excluir na tela de detalhe
 
-Agora o Dashboard usa o contexto em vez de dados estáticos.
+Hoje só é possível excluir uma transação com **toque longo** na lista do Dashboard. Vamos adicionar um botão **"Excluir"** visível na tela de detalhe, onde o usuário já está olhando o item e tem todo o contexto para decidir.
 
-### 5.1 — Substitua o conteúdo de `screens/DashboardScreen.js`
+### Por que na tela de detalhe?
+
+| | Toque longo na lista | Botão na tela de detalhe |
+|---|---|---|
+| Descoberta | Gesto oculto | Visual e óbvio |
+| Contexto | Apenas o resumo da linha | Item aberto, todos os dados à vista |
+| Risco | Pode disparar sem querer | Ação intencional após inspeção |
+
+> Os dois caminhos vão **coexistir**: o toque longo continua como atalho rápido para quem já o conhece, e o botão entra como ponto de acesso óbvio para todos os usuários.
+
+### O que vamos reaproveitar
+
+- O `TransacoesContext` já expõe `removerTransacao` (criado no Passo 3) — ele apaga no SQLite e atualiza a lista em memória
+- O Dashboard consome a lista do contexto, então re-renderiza sozinho quando a transação some
+
+Ou seja: nenhum arquivo do banco ou do contexto precisa mudar. A alteração é **só na tela de detalhe**.
+
+### 7.1 — Substitua o conteúdo completo de `screens/DetalheTransacaoScreen.js`
+
+> ⚠️ **Atenção:** copie e cole o arquivo inteiro abaixo.
 
 ```jsx
-// screens/DashboardScreen.js
+// screens/DetalheTransacaoScreen.js
 import React from 'react';
-import {
-  ScrollView, View, Text, StyleSheet,
-  ActivityIndicator, Alert
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
-import { setStatusBarStyle } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { CartaoSaldo } from '../components/CartaoSaldo';
-import { CardsResumo } from '../components/CardsResumo';
-import { ItemTransacao } from '../components/ItemTransacao';
 import { useTransacoes } from '../context/TransacoesContext';
-import { cores, espacamento } from '../theme';
+import { cores, espacamento, raio } from '../theme';
 
-export function DashboardScreen({ navigation, route }) {
-  const { transacoes, saldo, receitas, despesas, carregando, removerTransacao } = useTransacoes();
+export function DetalheTransacaoScreen({ route, navigation }) {
+  const { transacao } = route.params;  // recebe os dados via navigate()
+  const isReceita = transacao.tipo === 'receita';
+  const { removerTransacao } = useTransacoes();
 
-  // Mantém o status bar claro enquanto o Dashboard está em foco (cabeçalho azul) — vindo da Aula 3
-  useFocusEffect(
-    React.useCallback(() => {
-      setStatusBarStyle('light');
-      return () => setStatusBarStyle('dark');
-    }, [])
-  );
+  function confirmarExclusao() {
+    const mensagem = `Deseja excluir "${transacao.descricao}"?`;
+    const excluir = () => {
+      removerTransacao(transacao.id);
+      navigation.goBack();
+    };
 
-  function confirmarExclusao(id, descricao) {
+    // No react-native-web, Alert.alert ignora os botões e nunca chama onPress.
+    // Usamos window.confirm para que a confirmação funcione no Expo Web.
+    if (Platform.OS === 'web') {
+      if (window.confirm(mensagem)) excluir();
+      return;
+    }
+
     Alert.alert(
       'Excluir transação',
-      `Deseja excluir "${descricao}"?`,
+      mensagem,
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Excluir', style: 'destructive', onPress: () => removerTransacao(id) },
+        { text: 'Excluir', style: 'destructive', onPress: excluir },
       ]
     );
   }
 
-  // Tela de carregamento
-  if (carregando) {
-    return (
-      <View style={styles.centralizador}>
-        <ActivityIndicator size="large" color={cores.primaria} />
-        <Text style={styles.textoCarregando}>Carregando suas finanças...</Text>
-      </View>
-    );
-  }
-
-  // Renderiza o Dashboard: cabeçalho, cartão de saldo, resumo e lista de transações (com tela vazia quando não há dados)
-  return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.cabecalho}>
-          <Text style={styles.titulo}>Minhas Finanças</Text>
-          <Text style={styles.subtitulo}>
-            {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-          </Text>
-        </View>
-
-        <CartaoSaldo
-          saldo={saldo}
-          mes={new Date().toLocaleDateString('pt-BR', { month: 'long' })}
-        />
-
-        <CardsResumo receitas={receitas} despesas={despesas} />
-
-        <View style={styles.secao}>
-          <Text style={styles.tituloSecao}>Transações Recentes</Text>
-
-          {transacoes.length === 0 ? (
-            <View style={styles.vazio}>
-              <Ionicons name="wallet-outline" size={64} color="#bdc3c7" />
-              <Text style={styles.textoVazio}>Nenhuma transação ainda</Text>
-              <Text style={styles.subtextoVazio}>
-                Toque em "Nova Transação" para começar
-              </Text>
-            </View>
-          ) : (
-            transacoes.map(t => (
-              <ItemTransacao
-                key={t.id}
-                descricao={t.descricao}
-                valor={t.valor}
-                tipo={t.tipo}
-                categoria={t.categoria}
-                data={t.data}
-                // Navega para o detalhe (DetalheTransacaoScreen criada na Aula 3)
-                onPress={() => navigation.navigate('DetalheTransacao', { transacao: t })}
-                onLongPress={() => confirmarExclusao(t.id, t.descricao)}
-              />
-            ))
-          )}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: cores.primaria },
-  scroll: { flex: 1, backgroundColor: cores.fundo },
-  centralizador: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: cores.fundo,
-  },
-  textoCarregando: { marginTop: 12, color: cores.subtexto, fontSize: 14 },
-  cabecalho: {
-    backgroundColor: cores.primaria,
-    paddingHorizontal: espacamento.md,
-    paddingVertical: espacamento.lg,
-  },
-  titulo: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
-  subtitulo: { color: '#bdc3c7', fontSize: 14, marginTop: 2, textTransform: 'capitalize' },
-  secao: { padding: espacamento.md },
-  tituloSecao: { fontSize: 17, fontWeight: '700', color: cores.texto, marginBottom: espacamento.md },
-  vazio: { alignItems: 'center', paddingVertical: 48, gap: 8 },
-  textoVazio: { fontSize: 17, fontWeight: '600', color: cores.subtexto },
-  subtextoVazio: { fontSize: 13, color: '#bdc3c7', textAlign: 'center' },
-});
-```
-
-### 5.2 — Adicionar `onLongPress` ao ItemTransacao
-
-Substitua o conteúdo completo de `components/ItemTransacao.js` pelo código abaixo. Em relação à Aula 2, apenas a prop `onLongPress` foi acrescentada (linhas marcadas com `// ← NOVO`).
-
-```jsx
-// components/ItemTransacao.js
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { cores, espacamento, raio } from '../theme';
-
-// Mapeamento de categoria para ícone Ionicons
-const ICONES = {
-  alimentacao: 'restaurant',
-  transporte: 'car',
-  saude: 'medical',
-  lazer: 'game-controller',
-  salario: 'cash',
-  moradia: 'home',
-  educacao: 'school',
-  outros: 'ellipsis-horizontal-circle',
-};
-
-export function ItemTransacao({ descricao, valor, categoria, tipo, data, onPress, onLongPress }) { // ← NOVO: prop onLongPress
-  const isReceita = tipo === 'receita';
-  const nomeIcone = ICONES[categoria] ?? 'ellipsis-horizontal-circle';
-
-  // Renderiza o item da lista: ícone da categoria, descrição/data e valor formatado
-  return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={onPress}
-      onLongPress={onLongPress}                                                                    // ← NOVO: dispara a exclusão (toque longo)
-      activeOpacity={0.7}
-    >
-      <View style={[
-        styles.iconeContainer,
-        { backgroundColor: isReceita ? cores.receitaFundo : cores.despesaFundo }
-      ]}>
-        <Ionicons
-          name={nomeIcone}
-          size={22}
-          color={isReceita ? cores.receita : cores.despesa}
-        />
-      </View>
-
-      <View style={styles.info}>
-        <Text style={styles.descricao} numberOfLines={1}>{descricao}</Text>
-        <Text style={styles.data}>{data}</Text>
-      </View>
-
-      <Text style={[styles.valor, { color: isReceita ? cores.receita : cores.despesa }]}>
-        {isReceita ? '+' : '-'} R$ {valor.toFixed(2)}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: cores.cartao,
-    borderRadius: raio.md,
-    padding: espacamento.md,
-    marginBottom: espacamento.sm,
-    // Sombra (iOS):
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    // Sombra (Android):
-    elevation: 2,
-  },
-  iconeContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,            // círculo perfeito (metade do width/height)
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: espacamento.md,
-  },
-  info: {
-    flex: 1,                     // ocupa todo o espaço entre o ícone e o valor
-  },
-  descricao: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: cores.texto,
-  },
-  data: {
-    fontSize: 12,
-    color: cores.subtexto,
-    marginTop: 2,
-  },
-  valor: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginLeft: espacamento.sm,
-  },
-});
-```
-
----
-
-## Passo 6 — Atualizar a NovaTransacaoScreen
-
-Troque o `navigation.navigate('Dashboard', { novaTransacao })` pela função do contexto.
-
-### 6.1 — Substitua o conteúdo completo de `screens/NovaTransacaoScreen.js`
-
-```jsx
-// screens/NovaTransacaoScreen.js
-import React, { useState } from 'react';
-import {
-  View, Text, TextInput, TouchableOpacity,
-  ScrollView, StyleSheet, Alert
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { cores, espacamento, raio } from '../theme';
-import { useTransacoes } from '../context/TransacoesContext';  // ← NOVO
-
-const CATEGORIAS = [
-  { id: 'alimentacao', label: 'Alimentação', icone: 'restaurant' },
-  { id: 'transporte', label: 'Transporte', icone: 'car' },
-  { id: 'saude', label: 'Saúde', icone: 'medical' },
-  { id: 'lazer', label: 'Lazer', icone: 'game-controller' },
-  { id: 'moradia', label: 'Moradia', icone: 'home' },
-  { id: 'salario', label: 'Salário', icone: 'cash' },
-  { id: 'outros', label: 'Outros', icone: 'ellipsis-horizontal-circle' },
-];
-
-export function NovaTransacaoScreen({ navigation }) {
-  const [descricao, setDescricao] = useState('');
-  const [valor, setValor] = useState('');
-  const [tipo, setTipo] = useState('despesa');
-  const [categoria, setCategoria] = useState('outros');
-
-  const { adicionarTransacao } = useTransacoes();  // ← NOVO (dentro do componente)
-
-  // ↓ Função salvar atualizada para usar o contexto
-  const salvar = async () => {
-    if (!descricao.trim()) {
-      Alert.alert('Atenção', 'Digite uma descrição.');
-      return;
-    }
-    const valorNumerico = parseFloat(valor.replace(',', '.'));
-    if (!valor || isNaN(valorNumerico) || valorNumerico <= 0) {
-      Alert.alert('Atenção', 'Digite um valor válido.');
-      return;
-    }
-
-    await adicionarTransacao({
-      id: Date.now().toString(),
-      descricao: descricao.trim(),
-      valor: valorNumerico,
-      tipo,
-      categoria,
-      data: new Date().toLocaleDateString('pt-BR'),
-    });
-
-    setDescricao('');
-    setValor('');
-    setTipo('despesa');
-    setCategoria('outros');
-
-    navigation.navigate('Dashboard');
-  };
-
-  return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
-      <Text style={styles.tituloPagina}>Nova Transação</Text>
-
-      <Text style={styles.label}>Tipo</Text>
-      <View style={styles.seletor}>
-        {['receita', 'despesa'].map(t => (
-          <TouchableOpacity
-            key={t}
-            style={[
-              styles.botaoTipo,
-              tipo === t && { backgroundColor: t === 'receita' ? cores.receita : cores.despesa }
-            ]}
-            onPress={() => setTipo(t)}
-          >
-            <Ionicons
-              name={t === 'receita' ? 'arrow-up' : 'arrow-down'}
-              size={18}
-              color={tipo === t ? '#fff' : '#555'}
-            />
-            <Text style={[styles.textoTipo, tipo === t && { color: '#fff' }]}>
-              {t === 'receita' ? 'Receita' : 'Despesa'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <Text style={styles.label}>Descrição</Text>
-      <TextInput
-        style={styles.input}
-        value={descricao}
-        onChangeText={setDescricao}
-        placeholder="Ex: Supermercado, Salário..."
-        maxLength={50}
-        returnKeyType="next"
-      />
-
-      <Text style={styles.label}>Valor (R$)</Text>
-      <TextInput
-        style={styles.input}
-        value={valor}
-        onChangeText={setValor}
-        placeholder="0,00"
-        keyboardType="decimal-pad"
-        returnKeyType="done"
-      />
-
-      <Text style={styles.label}>Categoria</Text>
-      <View style={styles.categorias}>
-        {CATEGORIAS.map(cat => (
-          <TouchableOpacity
-            key={cat.id}
-            style={[
-              styles.chipCategoria,
-              categoria === cat.id && styles.chipAtivo
-            ]}
-            onPress={() => setCategoria(cat.id)}
-          >
-            <Ionicons
-              name={cat.icone}
-              size={16}
-              color={categoria === cat.id ? '#fff' : cores.subtexto}
-            />
-            <Text style={[
-              styles.textoChip,
-              categoria === cat.id && { color: '#fff' }
-            ]}>
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <TouchableOpacity style={styles.botaoSalvar} onPress={salvar} activeOpacity={0.8}>
-        <Ionicons name="checkmark" size={22} color="#fff" />
-        <Text style={styles.textoBotao}>Salvar Transação</Text>
-      </TouchableOpacity>
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: cores.fundo, padding: espacamento.md },
-  tituloPagina: {
-    fontSize: 22, fontWeight: 'bold', color: cores.texto,
-    marginTop: espacamento.lg, marginBottom: espacamento.lg,
-  },
-  label: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: espacamento.xs },
-  input: {
-    borderWidth: 1, borderColor: '#ddd', borderRadius: raio.sm,
-    padding: 12, fontSize: 16, marginBottom: espacamento.md,
-    backgroundColor: '#fff',
-  },
-  seletor: { flexDirection: 'row', gap: 12, marginBottom: espacamento.md },
-  botaoTipo: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, padding: 12, borderRadius: raio.sm,
-    borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff',
-  },
-  textoTipo: { fontSize: 15, fontWeight: '600', color: '#555' },
-  categorias: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: espacamento.lg },
-  chipCategoria: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingVertical: 6, paddingHorizontal: 12,
-    borderRadius: raio.pill, borderWidth: 1, borderColor: '#ddd',
-    backgroundColor: '#fff',
-  },
-  chipAtivo: { backgroundColor: cores.primaria, borderColor: cores.primaria },
-  textoChip: { fontSize: 13, color: cores.subtexto },
-  botaoSalvar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: cores.primaria, padding: 16,
-    borderRadius: raio.md, marginBottom: espacamento.xl,
-  },
-  textoBotao: { color: '#fff', fontSize: 16, fontWeight: '700' },
-});
-```
-
----
-
-## Passo 7 — Atualizar a RelatorioScreen
-
-### 7.1 — Substitua o conteúdo completo de `screens/RelatorioScreen.js`
-
-> ⚠️ **Atenção:** copie e cole o arquivo **inteiro** abaixo, substituindo todo o conteúdo do arquivo.
-
-```jsx
-// screens/RelatorioScreen.js
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { cores, espacamento, raio } from '../theme';
-import { useTransacoes } from '../context/TransacoesContext';  // ← NOVO
-
-export function RelatorioScreen() {
-  const { receitas, despesas, saldo, transacoes } = useTransacoes();  // ← NOVO
-
-  const total = receitas + despesas || 1;
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <Text style={styles.titulo}>Relatório — Maio 2026</Text>
 
-        <View style={styles.barra}>
-          <View style={[styles.segmento, {
-            flex: receitas / total,
-            backgroundColor: cores.receita,
-          }]} />
-          <View style={[styles.segmento, {
-            flex: despesas / total,
-            backgroundColor: cores.despesa,
-          }]} />
+        {/* Botão voltar */}
+        <TouchableOpacity style={styles.botaoVoltar} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={22} color={cores.texto} />
+          <Text style={styles.textoVoltar}>Voltar</Text>
+        </TouchableOpacity>
+
+        {/* Ícone do tipo */}
+        <View style={[styles.icone, { backgroundColor: isReceita ? cores.receitaFundo : cores.despesaFundo }]}>
+          <Ionicons
+            name={isReceita ? 'arrow-up-circle' : 'arrow-down-circle'}
+            size={48}
+            color={isReceita ? cores.receita : cores.despesa}
+          />
         </View>
 
-        <View style={styles.legenda}>
-          <View style={styles.itemLegenda}>
-            <View style={[styles.ponto, { backgroundColor: cores.receita }]} />
-            <Text style={styles.textoLegenda}>Receitas</Text>
-            <Text style={styles.valorLegenda}>R$ {receitas.toFixed(2)}</Text>
+        <Text style={styles.descricao}>{transacao.descricao}</Text>
+        <Text style={[styles.valor, { color: isReceita ? cores.receita : cores.despesa }]}>
+          {isReceita ? '+' : '-'} R$ {transacao.valor.toFixed(2)}
+        </Text>
+
+        <View style={styles.tabela}>
+          <View style={styles.linha}>
+            <Text style={styles.rotulo}>Tipo</Text>
+            <Text style={styles.dado}>{isReceita ? 'Receita' : 'Despesa'}</Text>
           </View>
-          <View style={styles.itemLegenda}>
-            <View style={[styles.ponto, { backgroundColor: cores.despesa }]} />
-            <Text style={styles.textoLegenda}>Despesas</Text>
-            <Text style={styles.valorLegenda}>R$ {despesas.toFixed(2)}</Text>
+          <View style={styles.linha}>
+            <Text style={styles.rotulo}>Categoria</Text>
+            <Text style={styles.dado}>{transacao.categoria}</Text>
+          </View>
+          <View style={styles.linha}>
+            <Text style={styles.rotulo}>Data</Text>
+            <Text style={styles.dado}>{transacao.data}</Text>
           </View>
         </View>
 
-        <View style={styles.saldoContainer}>
-          <Text style={styles.saldoLabel}>Saldo do mês</Text>
-          <Text style={[styles.saldoValor, { color: saldo >= 0 ? cores.receita : cores.despesa }]}>
-            R$ {saldo.toFixed(2)}
-          </Text>
-        </View>
+        <TouchableOpacity
+          style={styles.botaoExcluir}
+          onPress={confirmarExclusao}
+          accessibilityRole="button"
+          accessibilityLabel="Excluir transação"
+        >
+          <Ionicons name="trash-outline" size={20} color={cores.despesa} />
+          <Text style={styles.textoExcluir}>Excluir</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -680,333 +658,186 @@ export function RelatorioScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: cores.fundo },
-  container: { flex: 1, padding: espacamento.md },
-  titulo: { fontSize: 20, fontWeight: 'bold', color: cores.texto, marginBottom: espacamento.lg },
-  barra: {
-    flexDirection: 'row', height: 24, borderRadius: raio.pill,
-    overflow: 'hidden', marginBottom: espacamento.md,
+  container: { flex: 1, padding: espacamento.md, alignItems: 'center' },
+  botaoVoltar: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    alignSelf: 'flex-start', marginBottom: espacamento.lg,
   },
-  segmento: { height: '100%' },
-  legenda: { gap: 12, marginBottom: espacamento.lg },
-  itemLegenda: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  ponto: { width: 12, height: 12, borderRadius: 6 },
-  textoLegenda: { flex: 1, fontSize: 15, color: cores.texto },
-  valorLegenda: { fontSize: 15, fontWeight: '700', color: cores.texto },
-  saldoContainer: {
-    backgroundColor: cores.cartao, borderRadius: raio.md,
-    padding: espacamento.md, alignItems: 'center',
-  },
-  saldoLabel: { fontSize: 14, color: cores.subtexto },
-  saldoValor: { fontSize: 28, fontWeight: 'bold', marginTop: 4 },
-});
-```
-
----
-
-## Passo 8 — Testar o app completo
-
-Salve todos os arquivos e aguarde o Expo recarregar.
-
-### 8.1 — Roteiro de teste
-
-1. **Abra o app** → deve aparecer a tela vazia com ícone de carteira
-2. **Toque em "Nova Transação"** → preencha: "Salário", R$ 3200, Receita, Salário
-3. **Toque em "Salvar"** → volta para o Dashboard com a transação na lista
-4. **Adicione uma despesa** → "Supermercado", R$ 150, Despesa, Alimentação
-5. **Verifique o saldo** → deve ser R$ 3.050,00 (3200 − 150)
-6. **Feche e reabra o app** → as transações devem continuar lá ✅
-7. **Toque longo em uma transação** → diálogo de confirmação aparece
-8. **Confirme a exclusão** → transação some e saldo atualiza
-
----
-
-## Passo 9 — Consumindo uma API externa: Cotações do Dia
-
-Agora vamos buscar dados reais da internet usando `fetch`. Vamos exibir as cotações do Dólar e do Euro no Dashboard usando a **AwesomeAPI** — gratuita, sem cadastro e em português.
-
-> **Por que essa API?** `https://economia.awesomeapi.com.br` é mantida pela comunidade brasileira, retorna dados em BRL e não exige chave de acesso.
-
----
-
-### 9.1 — Criar a pasta `hooks`
-
-```bash
-mkdir hooks
-```
-
-> **O que é um custom hook?** É uma função que começa com `use` e encapsula lógica reutilizável com hooks do React (`useState`, `useEffect`). Aqui usamos para separar a lógica de busca da API do componente visual.
-
----
-
-### 9.2 — Crie `hooks/useCotacoes.js`
-
-```jsx
-// hooks/useCotacoes.js
-import { useState, useEffect } from 'react';
-
-// Documentação em https://docs.awesomeapi.com.br/api-de-moedas
-// Tem limitacao de consultas
-// const API_URL = 'https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL';
-
-// API de exemplo
-// Sem a limitacao de consulta
-const API_URL = 'https://api.cotacoes.cloud.marcelomatos.dev/cotacoes.json';
-
-export function useCotacoes() {
-  const [cotacoes, setCotacoes] = useState(null);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState(null);
-
-  useEffect(() => {
-    buscarCotacoes();
-  }, []);
-
-  async function buscarCotacoes() {
-    try {
-      setCarregando(true);
-      setErro(null);
-      const resposta = await fetch(API_URL);
-      if (!resposta.ok) throw new Error('Falha na requisição');
-      const dados = await resposta.json();
-      setCotacoes({
-        dolar: parseFloat(dados.USDBRL.bid),
-        euro: parseFloat(dados.EURBRL.bid),
-      });
-    } catch (e) {
-      setErro('Não foi possível carregar as cotações.');
-    } finally {
-      setCarregando(false);
-    }
-  }
-
-  return { cotacoes, carregando, erro, atualizar: buscarCotacoes };
-}
-```
-
-**O que acontece aqui:**
-
-| Elemento | Explicação |
-|----------|-----------|
-| `fetch(API_URL)` | Faz a requisição HTTP GET para a API |
-| `resposta.ok` | Verifica se o status HTTP foi 200–299 |
-| `resposta.json()` | Converte o corpo da resposta para objeto JS |
-| `dados.USDBRL.bid` | O campo `bid` é o preço de compra do dólar |
-| `catch` | Captura erros de rede ou de parse |
-| `finally` | Sempre desliga o loading, mesmo se der erro |
-| `atualizar` | Expõe a função para o componente chamar no botão de refresh |
-
----
-
-### 9.3 — Crie `components/CartaoCotacoes.js`
-
-```jsx
-// components/CartaoCotacoes.js
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useCotacoes } from '../hooks/useCotacoes';
-import { cores, espacamento, raio } from '../theme';
-
-export function CartaoCotacoes() {
-  const { cotacoes, carregando, erro, atualizar } = useCotacoes();
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.cabecalho}>
-        <Text style={styles.titulo}>Cotações do Dia</Text>
-        <TouchableOpacity onPress={atualizar}>
-          <Ionicons name="refresh" size={18} color={cores.subtexto} />
-        </TouchableOpacity>
-      </View>
-
-      {carregando ? (
-        <ActivityIndicator size="small" color={cores.primaria} />
-      ) : erro ? (
-        <Text style={styles.erro}>{erro}</Text>
-      ) : (
-        <View style={styles.linha}>
-          <View style={styles.item}>
-            <Text style={styles.moeda}>🇺🇸 Dólar</Text>
-            <Text style={styles.valor}>R$ {cotacoes.dolar.toFixed(2)}</Text>
-          </View>
-          <View style={styles.separador} />
-          <View style={styles.item}>
-            <Text style={styles.moeda}>🇪🇺 Euro</Text>
-            <Text style={styles.valor}>R$ {cotacoes.euro.toFixed(2)}</Text>
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: cores.cartao,
-    borderRadius: raio.md,
-    padding: espacamento.md,
-    marginHorizontal: espacamento.md,
+  textoVoltar: { fontSize: 16, color: cores.texto },
+  icone: {
+    width: 88, height: 88, borderRadius: 44,
+    justifyContent: 'center', alignItems: 'center',
     marginBottom: espacamento.md,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
   },
-  cabecalho: {
+  descricao: { fontSize: 22, fontWeight: 'bold', color: cores.texto, marginBottom: 4 },
+  valor: { fontSize: 32, fontWeight: '800', marginBottom: espacamento.lg },
+  tabela: {
+    width: '100%', backgroundColor: cores.cartao,
+    borderRadius: raio.md, padding: espacamento.md, gap: 12,
+  },
+  linha: { flexDirection: 'row', justifyContent: 'space-between' },
+  rotulo: { fontSize: 14, color: cores.subtexto },
+  dado: { fontSize: 14, fontWeight: '600', color: cores.texto },
+  botaoExcluir: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: espacamento.sm,
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+    marginTop: espacamento.lg,
+    paddingVertical: espacamento.md,
+    borderRadius: raio.md,
+    borderWidth: 1,
+    borderColor: cores.despesa,
+    backgroundColor: 'transparent',
   },
-  titulo: { fontSize: 14, fontWeight: '600', color: cores.subtexto },
-  linha: { flexDirection: 'row', alignItems: 'center' },
-  item: { flex: 1, alignItems: 'center' },
-  moeda: { fontSize: 13, color: cores.subtexto, marginBottom: 2 },
-  valor: { fontSize: 18, fontWeight: '700', color: cores.texto },
-  separador: { width: 1, height: 36, backgroundColor: '#eee' },
-  erro: { fontSize: 13, color: cores.despesa, textAlign: 'center' },
+  textoExcluir: { fontSize: 16, fontWeight: '600', color: cores.despesa },
 });
 ```
 
+**O que mudou em relação à versão anterior:**
+
+| Adição | Por quê |
+|---|---|
+| `Alert` no import de `react-native` | Para exibir o diálogo nativo de confirmação |
+| `useTransacoes` do contexto | Para acessar `removerTransacao` (que apaga no SQLite e atualiza a lista) |
+| Função `confirmarExclusao()` | Encapsula o fluxo: pergunta → remove → volta |
+| `style: 'destructive'` no botão "Excluir" do Alert | Padrão iOS/Android: o iOS pinta de vermelho automaticamente, sinalizando perigo |
+| `removerTransacao(transacao.id)` seguido de `navigation.goBack()` | Apaga e retorna ao Dashboard, que re-renderiza sozinho via contexto |
+| Estilos `botaoExcluir` e `textoExcluir` | Outline vermelho — ação destrutiva sem dominar a tela |
+| `accessibilityRole` e `accessibilityLabel` | Leitores de tela anunciam "Excluir transação, botão" |
+
+> **Por que outline em vez de fundo vermelho sólido?** O foco visual da tela é o **valor** da transação. Um botão sólido em vermelho competiria com ele e deixaria a tela visualmente "alarmada". O outline preserva a hierarquia: o valor continua sendo o protagonista, e o botão sinaliza claramente que é uma ação perigosa sem ofuscar o resto.
+
+> **Por que `Alert.alert` e não um Modal customizado?** O `Alert.alert` é nativo, gratuito (sem código adicional), e respeita as convenções da plataforma — no iOS aparece como um popup central, no Android como um diálogo Material. Para uma confirmação simples de "sim/não", essa é a escolha certa. Modal customizado só faz sentido quando você precisa de campos de entrada ou layout específico do app.
+
+### 7.2 — Roteiro de teste
+
+1. Adicione algumas transações de teste no app
+2. Toque em uma para abrir a tela de detalhe → o botão **Excluir** aparece abaixo da tabela
+3. Toque em **Excluir** → o Alert nativo aparece com o nome da transação na pergunta
+4. Toque em **Cancelar** → o Alert fecha, a transação continua lá ✅
+5. Repita e toque em **Excluir** no Alert → volta ao Dashboard, transação sumiu da lista ✅
+6. Feche e reabra o app → a transação excluída continua sumida (persistência confirmada) ✅
+7. Confirme que o **toque longo** na lista do Dashboard ainda funciona como atalho
+
 ---
 
-### 9.4 — Adicionar o CartaoCotacoes ao DashboardScreen
+## Referência Rápida — Para Aprofundar
 
-Substitua o conteúdo completo de `screens/DashboardScreen.js` pelo código abaixo. Em relação ao Passo 5.1, foram acrescentados o import (linha marcada com `// ← NOVO`) e a renderização do `<CartaoCotacoes />` logo após `<CardsResumo />`.
+> Esta seção é **só para consulta**. Não é necessária para concluir o app — serve como guia de estudo para reforçar os conceitos de banco usados na aula. Use-a no seu ritmo.
+
+### R1 — UPDATE: modificar registros existentes
+
+A aula usa `INSERT`, `SELECT` e `DELETE`. O quarto comando essencial é o `UPDATE`, que altera colunas de uma linha que **já existe** no banco.
+
+```sql
+UPDATE transacoes
+SET valor = ?, descricao = ?
+WHERE id = ?;
+```
+
+Exemplo de função em JavaScript (referência — não precisa adicionar ao projeto agora):
 
 ```jsx
-// screens/DashboardScreen.js
-import React from 'react';
-import {
-  ScrollView, View, Text, StyleSheet,
-  ActivityIndicator, Alert
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
-import { setStatusBarStyle } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
-import { CartaoSaldo } from '../components/CartaoSaldo';
-import { CardsResumo } from '../components/CardsResumo';
-import { CartaoCotacoes } from '../components/CartaoCotacoes';   // ← NOVO
-import { ItemTransacao } from '../components/ItemTransacao';
-import { useTransacoes } from '../context/TransacoesContext';
-import { cores, espacamento } from '../theme';
-
-export function DashboardScreen({ navigation, route }) {
-  const { transacoes, saldo, receitas, despesas, carregando, removerTransacao } = useTransacoes();
-
-  // Mantém o status bar claro enquanto o Dashboard está em foco (cabeçalho azul) — vindo da Aula 3
-  useFocusEffect(
-    React.useCallback(() => {
-      setStatusBarStyle('light');
-      return () => setStatusBarStyle('dark');
-    }, [])
-  );
-
-  function confirmarExclusao(id, descricao) {
-    Alert.alert(
-      'Excluir transação',
-      `Deseja excluir "${descricao}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Excluir', style: 'destructive', onPress: () => removerTransacao(id) },
-      ]
-    );
-  }
-
-  // Tela de carregamento
-  if (carregando) {
-    return (
-      <View style={styles.centralizador}>
-        <ActivityIndicator size="large" color={cores.primaria} />
-        <Text style={styles.textoCarregando}>Carregando suas finanças...</Text>
-      </View>
-    );
-  }
-
-  // Renderiza o Dashboard: cabeçalho, cartão de saldo, resumo, cotações do dia e lista de transações
-  return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.cabecalho}>
-          <Text style={styles.titulo}>Minhas Finanças</Text>
-          <Text style={styles.subtitulo}>
-            {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-          </Text>
-        </View>
-
-        <CartaoSaldo
-          saldo={saldo}
-          mes={new Date().toLocaleDateString('pt-BR', { month: 'long' })}
-        />
-
-        <CardsResumo receitas={receitas} despesas={despesas} />
-
-        <CartaoCotacoes />
-
-        <View style={styles.secao}>
-          <Text style={styles.tituloSecao}>Transações Recentes</Text>
-
-          {transacoes.length === 0 ? (
-            <View style={styles.vazio}>
-              <Ionicons name="wallet-outline" size={64} color="#bdc3c7" />
-              <Text style={styles.textoVazio}>Nenhuma transação ainda</Text>
-              <Text style={styles.subtextoVazio}>
-                Toque em "Nova Transação" para começar
-              </Text>
-            </View>
-          ) : (
-            transacoes.map(t => (
-              <ItemTransacao
-                key={t.id}
-                descricao={t.descricao}
-                valor={t.valor}
-                tipo={t.tipo}
-                categoria={t.categoria}
-                data={t.data}
-                // Navega para o detalhe (DetalheTransacaoScreen criada na Aula 3)
-                onPress={() => navigation.navigate('DetalheTransacao', { transacao: t })}
-                onLongPress={() => confirmarExclusao(t.id, t.descricao)}
-              />
-            ))
-          )}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+// Atualiza uma transação existente pelo id
+export async function atualizarTransacao(t) {
+  await db.runAsync(
+    'UPDATE transacoes SET descricao = ?, valor = ?, tipo = ?, categoria = ?, data = ? WHERE id = ?',
+    [t.descricao, t.valor, t.tipo, t.categoria, t.data, t.id]
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: cores.primaria },
-  scroll: { flex: 1, backgroundColor: cores.fundo },
-  centralizador: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: cores.fundo,
-  },
-  textoCarregando: { marginTop: 12, color: cores.subtexto, fontSize: 14 },
-  cabecalho: {
-    backgroundColor: cores.primaria,
-    paddingHorizontal: espacamento.md,
-    paddingVertical: espacamento.lg,
-  },
-  titulo: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
-  subtitulo: { color: '#bdc3c7', fontSize: 14, marginTop: 2, textTransform: 'capitalize' },
-  secao: { padding: espacamento.md },
-  tituloSecao: { fontSize: 17, fontWeight: '700', color: cores.texto, marginBottom: espacamento.md },
-  vazio: { alignItems: 'center', paddingVertical: 48, gap: 8 },
-  textoVazio: { fontSize: 17, fontWeight: '600', color: cores.subtexto },
-  subtextoVazio: { fontSize: 13, color: '#bdc3c7', textAlign: 'center' },
-});
 ```
+
+> ⚠️ **Cuidado com `UPDATE` sem `WHERE`.** O comando `UPDATE transacoes SET valor = 0` (sem `WHERE`) zera **todas as linhas** da tabela. O `WHERE` é o que torna a operação cirúrgica. A mesma regra vale para `DELETE`.
 
 ---
 
-### 9.5 — Testar
+### R2 — Por que usar `?` em vez de juntar strings (SQL injection)
 
-1. Salve todos os arquivos e aguarde o Expo recarregar
-2. O Dashboard deve exibir um card "Cotações do Dia" com os valores atuais de Dólar e Euro
-3. Toque no ícone de refresh (↻) para buscar os valores mais recentes
-4. Desative o Wi-Fi e recarregue — o card deve exibir a mensagem de erro
+Repare que todas as funções do banco usam `?` como marcador para os valores, e os valores entram em um array separado:
+
+```jsx
+// ✅ Forma correta — usa ? e passa os valores em um array
+db.runSync(
+  'INSERT INTO transacoes (id, descricao) VALUES (?, ?)',
+  [t.id, t.descricao]
+);
+```
+
+O que aconteceria se você juntasse a string assim?
+
+```jsx
+// ❌ NUNCA faça isso — vulnerável a SQL injection
+db.runSync(
+  `INSERT INTO transacoes (id, descricao) VALUES ('${t.id}', '${t.descricao}')`
+);
+```
+
+Se o usuário digitasse na descrição algo como `'); DROP TABLE transacoes; --`, a string final viraria um comando que **apaga a tabela inteira**. Com `?`, o SQLite trata o texto sempre como **dado**, nunca como comando.
+
+Mesmo num app local, sempre use `?`:
+
+- Evita problemas com aspas e apóstrofes (ex.: descrição "Pão d'água" quebraria a string)
+- O banco escapa os valores corretamente para você
+- É o padrão profissional — você cria o hábito certo desde o primeiro dia
+
+---
+
+### R3 — Constraints: regras que o banco garante
+
+No `CREATE TABLE` do Passo 2 já vimos `PRIMARY KEY` e `NOT NULL`. Existem outras restrições úteis:
+
+| Constraint | O que faz | Exemplo |
+|---|---|---|
+| `PRIMARY KEY` | Identifica unicamente cada linha; não pode ser nula nem repetir | `id TEXT PRIMARY KEY` |
+| `NOT NULL` | A coluna não aceita o valor `NULL` (vazio) | `valor REAL NOT NULL` |
+| `DEFAULT` | Valor automático quando o INSERT não informa a coluna | `categoria TEXT DEFAULT 'Outros'` |
+| `UNIQUE` | Não permite duas linhas com o mesmo valor nessa coluna | `email TEXT UNIQUE` |
+| `CHECK` | Só aceita valores que satisfaçam a condição entre parênteses | `valor REAL CHECK (valor > 0)` |
+
+Versão mais protegida da tabela `transacoes` (apenas para estudo):
+
+```sql
+CREATE TABLE IF NOT EXISTS transacoes (
+  id        TEXT PRIMARY KEY,
+  descricao TEXT NOT NULL,
+  valor     REAL NOT NULL CHECK (valor > 0),
+  tipo      TEXT NOT NULL CHECK (tipo IN ('receita', 'despesa')),
+  categoria TEXT NOT NULL DEFAULT 'Outros',
+  data      TEXT NOT NULL
+);
+```
+
+> **Por que isso importa?** Se algum INSERT violar uma constraint, o banco rejeita a operação e lança um erro. Constraints transformam regras de negócio em garantias do banco — mesmo que o programador esqueça de validar no JavaScript, o banco não deixa o dado inconsistente entrar.
+
+---
+
+### R4 — DB Browser for SQLite: ferramenta de manutenção do banco
+
+O **DB Browser for SQLite** é um programa gratuito que abre arquivos `.db` e mostra as tabelas como uma planilha. É a ferramenta padrão para **manutenção e inspeção** de bancos SQLite — tanto em desenvolvimento quanto em produção:
+
+- Conferir o `CREATE TABLE` e os tipos de cada coluna
+- Visualizar todas as linhas de uma tabela como planilha
+- Executar `SELECT`, `UPDATE`, `INSERT` e `DELETE` manualmente, sem precisar mexer no código do app
+- Importar/exportar dados em CSV ou SQL
+- Corrigir registros, ajustar valores, popular o banco com dados de teste
+
+#### Instalação
+
+| Sistema | Como instalar |
+|---|---|
+| Windows | Baixe o `.exe` em [sqlitebrowser.org](https://sqlitebrowser.org) |
+| macOS | `brew install --cask db-browser-for-sqlite` ou baixe pelo site |
+| Linux (Ubuntu/Debian) | `sudo apt install sqlitebrowser` |
+
+#### Principais abas
+
+- **Database Structure** — mostra o `CREATE TABLE` que gerou cada tabela
+- **Browse Data** — todas as linhas da tabela como planilha; permite editar diretamente
+- **Execute SQL** — roda qualquer comando SQL manualmente para testar consultas
+
+> 💡 Você pode criar um banco `.db` local no seu computador, brincar com `CREATE TABLE`, `INSERT` e `SELECT` no DB Browser e depois reaproveitar as queries no código do app — uma forma rápida de praticar SQL sem rodar o app a cada teste.
 
 ---
 
@@ -1014,49 +845,50 @@ const styles = StyleSheet.create({
 
 | Funcionalidade | Status |
 |----------------|--------|
-| Transações persistem ao fechar o app | ✅ AsyncStorage |
-| Formulário salva de verdade | ✅ `adicionarTransacao()` |
-| Excluir com toque longo | ✅ `onLongPress` + `removerTransacao()` |
-| Saldo calculado dinamicamente | ✅ `reduce()` no contexto |
-| Loading enquanto carrega | ✅ `ActivityIndicator` |
-| Tela vazia motivacional | ✅ Empty state |
-| Estado compartilhado entre telas | ✅ Context API |
-| Cotações do dia via API externa | ✅ `fetch` + AwesomeAPI |
+| Banco criado automaticamente | ✅ `CREATE TABLE IF NOT EXISTS` |
+| Transações salvas em tabela SQL | ✅ `INSERT INTO` |
+| Carregamento ao abrir o app | ✅ `SELECT * FROM` |
+| Exclusão por id | ✅ `DELETE FROM WHERE` |
+| API assíncrona com `async/await` | ✅ `expo-sqlite` async API (`openDatabaseAsync`, `runAsync`, `getAllAsync`) |
+| Consultas avançadas (bônus) | ✅ `WHERE`, `SUM`, `BETWEEN` |
+| Boas-vindas só no primeiro acesso | ✅ `AsyncStorage` + `PrimeiroAcessoContext` |
+| Botão excluir na tela de detalhe | ✅ `Alert.alert` + `removerTransacao` + `goBack` |
 
 ---
 
 ## Resolução de Problemas
 
-### "Cannot find module @react-native-async-storage/async-storage"
+### "Cannot find module 'expo-sqlite'"
 ```bash
-npx expo install @react-native-async-storage/async-storage
+npx expo install expo-sqlite
 ```
-Reinicie o servidor: pressione `r` no terminal do Expo.
+Reinicie o servidor com `r` no terminal do Expo.
 
-### "useTransacoes precisa estar dentro de TransacoesProvider"
-Verifique se o `<TransacoesProvider>` envolve o `<NavigationContainer>` no `App.js`.
+### O banco começa vazio mesmo tendo dados da Aula 4
+Esperado — AsyncStorage e SQLite são armazenamentos independentes. Os dados do AsyncStorage não migram automaticamente para o SQLite. Em produção, você implementaria uma migração na primeira abertura após a atualização.
 
-### Os dados somem ao fechar o app
-Confirme que `await AsyncStorage.setItem(...)` está sendo chamado tanto em `adicionarTransacao` quanto em `removerTransacao`.
+### "no such table: transacoes"
+Confirme que `inicializarBanco()` é chamado antes de qualquer outra função do banco no `useEffect` do `TransacoesProvider`.
 
-### O saldo não atualiza após adicionar transação
-O saldo é calculado com `reduce()` diretamente do array `transacoes`. Se o array atualizar, o saldo atualiza automaticamente. Certifique-se de que `setTransacoes(atualizadas)` é chamado com o array completo.
+### Dados somem após fechar o app
+Verifique se `inserirTransacao(novaTransacao)` está sendo chamado em `adicionarTransacao()` — a função do banco precisa ser chamada antes ou junto com o `setTransacoes`.
 
-### "JSON.parse: unexpected character"
-Isso acontece se o AsyncStorage tiver um valor corrompido. Para limpar durante o desenvolvimento:
-```jsx
-await AsyncStorage.removeItem('@minhasfinancas:transacoes');
-```
+### "Cannot read properties of undefined (reading 'getAllAsync')"
+Significa que alguma função do banco rodou **antes** de `inicializarBanco()` terminar. A `db` só é atribuída ao final daquele `await`. Confirme que o `useEffect` do `TransacoesProvider` espera `inicializarBanco()` antes de chamar `carregarTransacoes()`:
 
-### O card de cotações mostra "Não foi possível carregar"
-Verifique sua conexão com a internet. A AwesomeAPI é um serviço externo e requer rede ativa. No emulador Android, confirme que o acesso à internet está habilitado nas configurações do emulador. Toque no ícone ↻ para tentar novamente.
-
-### As cotações não atualizam automaticamente
-O hook `useCotacoes` busca os dados uma única vez ao montar o componente (`useEffect` com array vazio `[]`). Para atualização automática a cada X minutos, adicione um `setInterval` dentro do `useEffect`:
 ```jsx
 useEffect(() => {
-  buscarCotacoes();
-  const intervalo = setInterval(buscarCotacoes, 5 * 60 * 1000); // a cada 5 min
-  return () => clearInterval(intervalo); // limpa ao desmontar
+  (async () => {
+    await inicializarBanco();
+    await carregarTransacoes();
+  })();
 }, []);
 ```
+
+> 💡 **Dica — problemas de rede ao abrir no celular?** Se ao escanear o QR code o Expo exibir a tela **"Something went wrong"** (computador e celular em redes diferentes, ou rede Wi-Fi bloqueando conexões locais), reinicie com o parâmetro `--tunnel`:
+>
+> ```bash
+> npx expo start --tunnel
+> ```
+>
+> O modo tunnel cria uma conexão via internet (ngrok), dispensando que o celular esteja na mesma rede do computador. É mais lento, porém funciona em qualquer cenário de rede.
