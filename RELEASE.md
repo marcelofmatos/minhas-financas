@@ -39,9 +39,9 @@ A Aula 05 **adicionou funcionalidades** ao projeto sem quebrar a estrutura entre
 - A `BoasVindasScreen` está nesta versão agora controlada por contexto persistente em vez de `useState` em memória ✅
 - Quem clonou na `1.3.0` consegue dar `git pull` na `1.4.0` e rodar `npm install` para ter o banco SQLite e o controle de primeiro acesso ✅
 
-Como **adicionamos features compatíveis** (banco local com SQLite, contexto de primeiro acesso persistido e suporte a `.wasm` no bundler para o web), incrementamos o **MINOR** (`1.3.0` → `1.4.0`) e zeramos o PATCH.
+Como **adicionamos features compatíveis** (banco local com SQLite, contexto de primeiro acesso persistido, botão de excluir na tela de detalhe e suporte ao Expo Web via `metro.config.js`), incrementamos o **MINOR** (`1.3.0` → `1.4.0`) e zeramos o PATCH.
 
-> **Observação didática:** trocamos a persistência de transações de `AsyncStorage` para `SQLite`. Embora a *implementação interna* tenha mudado bastante (inclusive de assíncrono para síncrono), a *interface pública* do `TransacoesContext` foi preservada — por isso a release continua MINOR. Em projetos que **expusessem** as chaves do AsyncStorage como contrato público (ex.: lib usada por terceiros), essa troca seria candidata a MAJOR.
+> **Observação didática:** trocamos a persistência de transações de `AsyncStorage` para `SQLite`. Embora a *implementação interna* tenha mudado bastante, a *interface pública* do `TransacoesContext` foi preservada — por isso a release continua MINOR. Em projetos que **expusessem** as chaves do AsyncStorage como contrato público (ex.: lib usada por terceiros), essa troca seria candidata a MAJOR.
 
 ---
 
@@ -92,34 +92,37 @@ git push origin 1.4.0
 ````markdown
 ## 🚀 1.4.0 — Aula 05: Armazenamento com SQLite
 
-Quinta release do projeto **minhas-financas**, marcando o fim da Aula 05 do Módulo 06. Esta versão troca a persistência local do app: as transações agora vivem em um **banco SQLite** (via `expo-sqlite`) com API síncrona, enquanto a flag de primeiro acesso passa a ser persistida em `AsyncStorage` por meio de um novo contexto dedicado.
+Quinta release do projeto **minhas-financas**, marcando o fim da Aula 05 do Módulo 06. Esta versão troca a persistência local do app: as transações agora vivem em um **banco SQLite** (via `expo-sqlite`) com API assíncrona (`async`/`await`), enquanto a flag de primeiro acesso passa a ser persistida em `AsyncStorage` por meio de um novo contexto dedicado. Também passa a ser possível **rodar o app no Expo Web** graças à configuração do Metro para resolver `.wasm`.
 
 ### ✨ Novas funcionalidades
 - **Banco de dados SQLite local** (`minhasfinancas.db`) para armazenar transações entre execuções
-- **Operações CRUD síncronas** (`inicializarBanco`, `buscarTodasTransacoes`, `inserirTransacao`, `excluirTransacao`)
+- **Operações CRUD assíncronas** (`inicializarBanco`, `buscarTodasTransacoes`, `inserirTransacao`, `excluirTransacao`) usando a API moderna `async`/`await` do `expo-sqlite`
 - **Contexto de primeiro acesso persistido** (`PrimeiroAcessoProvider`) — a `BoasVindasScreen` aparece **só uma vez por instalação**
 - **Navegação condicional no `App.js`** via composição de Providers (welcome × app principal)
-- **Suporte a arquivos `.wasm`** no bundler Metro (necessário para o SQLite no target web)
+- **Suporte ao Expo Web** via `metro.config.js` — registra `.wasm` tanto em `assetExts` quanto em `sourceExts`, permitindo o `expo-sqlite` carregar o SQLite WebAssembly no navegador
+- **Botão "Excluir" na tela de detalhe da transação** com confirmação via `Alert` nativo (e `window.confirm` no web)
 - **Estilização da `StatusBar`** integrada ao `SafeAreaView` no Dashboard
 - **Funções bônus comentadas** em `database/db.js` para consultas avançadas (`buscarPorCategoria`, `totalPorTipo`, `buscarPorPeriodo`)
 
 ### 📚 Conceitos demonstrados
 - Diferença entre **chave-valor (AsyncStorage)** e **banco relacional (SQLite)** — quando usar cada um
-- **API síncrona** do `expo-sqlite` (`execSync`, `runSync`, `getAllSync`, `getFirstSync`) e por que ela não trava a UI
+- **API assíncrona** do `expo-sqlite` (`openDatabaseAsync`, `execAsync`, `runAsync`, `getAllAsync`, `getFirstAsync`) e o uso de IIFE `async` em `useEffect`
 - SQL aplicado: `CREATE TABLE IF NOT EXISTS`, `INSERT`, `DELETE`, `SELECT … ORDER BY`, `WHERE`, `SUM`, `BETWEEN`
 - **Composição de múltiplos contextos** com responsabilidades distintas (`PrimeiroAcessoProvider` × `TransacoesProvider`)
 - **Carregamento assíncrono** com guard `if (carregando) return null` para evitar flash de UI
 - **Migração de implementação** preservando a interface pública do hook (`useTransacoes`) — exemplo prático de SemVer
-- Configuração do **Metro bundler** (`metro.config.js`) para resolver assets adicionais
+- Configuração do **Metro bundler** (`metro.config.js`) — `assetExts` × `sourceExts` e por que ambos são necessários para resolver `.wasm`
+- **Diferenças de plataforma** tratadas em runtime: `Platform.OS === 'web'` para escolher entre `Alert.alert` (mobile) e `window.confirm` (web)
 
 ### 🧩 Novos arquivos
-- `database/db.js` — helper do banco SQLite (CRUD + funções bônus comentadas para consultas avançadas)
+- `database/db.js` — helper do banco SQLite (CRUD assíncrono + funções bônus comentadas para consultas avançadas)
 - `context/PrimeiroAcessoContext.js` — provider/hook que persiste o estado do onboarding em `AsyncStorage`
-- `metro.config.js` — configuração do bundler para incluir `.wasm` em `assetExts`
+- `metro.config.js` — configuração do bundler que registra `.wasm` em `assetExts` e `sourceExts` para habilitar o SQLite no Expo Web
 
 ### ♻️ Mudanças no que já existia
-- `context/TransacoesContext.js` — agora usa `database/db.js` em vez de `AsyncStorage`; sem `async/await`
+- `context/TransacoesContext.js` — agora usa `database/db.js` em vez de `AsyncStorage`; funções `async`/`await` e IIFE assíncrona dentro do `useEffect`
 - `App.js` — extrai o estado de primeiro acesso para o `PrimeiroAcessoProvider`; renderização decidida pelo `ConteudoApp`
+- `screens/DetalheTransacaoScreen.js` — adiciona botão **Excluir** com confirmação (`Alert.alert` no mobile, `window.confirm` no web) e integração com `removerTransacao`
 - `screens/DashboardScreen.js` — `SafeAreaView` ajustado e `StatusBar` estilizada
 - `screens/RelatorioScreen.js` — título atualizado para **Maio 2026**
 - `routes/TabRoutes.js` — pequeno ajuste de estilo na `tabBar`
@@ -156,7 +159,7 @@ npm test
 Os relatórios HTML são gerados em `tests/reports/`.
 
 ### 📖 Documentação
-- [`README.md`](./README.md) — teoria da Aula 05 (AsyncStorage × SQLite, API síncrona, consultas avançadas)
+- [`README.md`](./README.md) — teoria da Aula 05 (AsyncStorage × SQLite, API assíncrona, consultas avançadas)
 - [`STEPS.md`](./STEPS.md) — tutorial passo a passo da Aula 05
 - [`tests/README.md`](./tests/README.md) — como executar os testes E2E
 
