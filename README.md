@@ -130,6 +130,7 @@ minhas-financas/
 │   └── db.js                ← NOVO: helper do banco SQLite
 ├── context/
 │   └── TransacoesContext.js ← ATUALIZADO: usa SQLite
+├── metro.config.js          ← NOVO: habilita .wasm para rodar SQLite no Expo Web
 └── ...
 ```
 
@@ -144,7 +145,7 @@ cd minhas-financas
 npx expo start
 ```
 
-> **Atenção:** `expo-sqlite` **não funciona na versão web** (`localhost:8082`). Sempre teste no emulador Android (tecla `a`) ou no celular com Expo Go.
+> **Suporte ao Expo Web:** com o `metro.config.js` da aula (Passo 2.2), o `expo-sqlite` roda também no navegador (`localhost:8081`, tecla `w`). Sem essa configuração, o app só funciona no emulador Android (tecla `a`) ou no celular com Expo Go.
 
 ### O que o demo mostra
 
@@ -164,6 +165,7 @@ minhas-financas/
 │   └── db.js                 # helper com todas as funções SQL
 ├── context/
 │   └── TransacoesContext.js  # usa SQLite (não mais AsyncStorage)
+├── metro.config.js           # habilita .wasm — necessário para o Expo Web
 └── ...
 ```
 
