@@ -14,14 +14,16 @@ export function TransacoesProvider({ children }) {
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
-    inicializarBanco();   // cria a tabela se não existir
-    carregarTransacoes();
+    (async () => {
+      await inicializarBanco();   // cria a tabela se não existir
+      await carregarTransacoes();
+    })();
   }, []);
 
-  function carregarTransacoes() {
+  async function carregarTransacoes() {
     try {
       setCarregando(true);
-      const dados = buscarTodasTransacoes();
+      const dados = await buscarTodasTransacoes();
       setTransacoes(dados);
     } catch (erro) {
       console.error('Erro ao carregar transações:', erro);
@@ -30,13 +32,13 @@ export function TransacoesProvider({ children }) {
     }
   }
 
-  function adicionarTransacao(novaTransacao) {
-    inserirTransacao(novaTransacao);
+  async function adicionarTransacao(novaTransacao) {
+    await inserirTransacao(novaTransacao);
     setTransacoes(prev => [novaTransacao, ...prev]);
   }
 
-  function removerTransacao(id) {
-    excluirTransacao(id);
+  async function removerTransacao(id) {
+    await excluirTransacao(id);
     setTransacoes(prev => prev.filter(t => t.id !== id));
   }
 

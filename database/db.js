@@ -1,12 +1,12 @@
 // database/db.js
 import * as SQLite from 'expo-sqlite';
 
-// Abre (ou cria) o banco de dados
-const db = SQLite.openDatabaseSync('minhasfinancas.db');
+let db;
 
 // Cria a tabela se ainda não existir
-export function inicializarBanco() {
-  db.execSync(`
+export async function inicializarBanco() {
+  db = await SQLite.openDatabaseAsync('minhasfinancas.db');
+  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS transacoes (
       id        TEXT PRIMARY KEY,
       descricao TEXT NOT NULL,
@@ -19,31 +19,31 @@ export function inicializarBanco() {
 }
 
 // Retorna todas as transações, mais recentes primeiro
-export function buscarTodasTransacoes() {
-  return db.getAllSync(
+export async function buscarTodasTransacoes() {
+  return await db.getAllAsync(
     'SELECT * FROM transacoes ORDER BY rowid DESC'
   );
 }
 
 // Insere uma nova transação
-export function inserirTransacao(t) {
-  db.runSync(
+export async function inserirTransacao(t) {
+  await db.runAsync(
     'INSERT INTO transacoes (id, descricao, valor, tipo, categoria, data) VALUES (?, ?, ?, ?, ?, ?)',
     [t.id, t.descricao, t.valor, t.tipo, t.categoria, t.data]
   );
 }
 
 // Remove uma transação pelo id
-export function excluirTransacao(id) {
-  db.runSync('DELETE FROM transacoes WHERE id = ?', [id]);
+export async function excluirTransacao(id) {
+  await db.runAsync('DELETE FROM transacoes WHERE id = ?', [id]);
 }
 
 // ---------------------------------------------------------------------------
 // Bônus — STEPS.md Passo 4.2 (debug opcional)
 // Descomente temporariamente para inspecionar o conteúdo da tabela no console.
 // ---------------------------------------------------------------------------
-// export function logTransacoes() {
-//   const dados = db.getAllSync('SELECT * FROM transacoes');
+// export async function logTransacoes() {
+//   const dados = await db.getAllAsync('SELECT * FROM transacoes');
 //   console.log('Transações no banco:', JSON.stringify(dados, null, 2));
 // }
 
@@ -55,16 +55,16 @@ export function excluirTransacao(id) {
 // ---------------------------------------------------------------------------
 
 // Busca apenas despesas de uma categoria
-// export function buscarPorCategoria(categoria) {
-//   return db.getAllSync(
+// export async function buscarPorCategoria(categoria) {
+//   return await db.getAllAsync(
 //     'SELECT * FROM transacoes WHERE categoria = ? ORDER BY rowid DESC',
 //     [categoria]
 //   );
 // }
 
 // Soma total por tipo
-// export function totalPorTipo(tipo) {
-//   const resultado = db.getFirstSync(
+// export async function totalPorTipo(tipo) {
+//   const resultado = await db.getFirstAsync(
 //     'SELECT SUM(valor) as total FROM transacoes WHERE tipo = ?',
 //     [tipo]
 //   );
@@ -72,8 +72,8 @@ export function excluirTransacao(id) {
 // }
 
 // Busca transações de um período
-// export function buscarPorPeriodo(dataInicio, dataFim) {
-//   return db.getAllSync(
+// export async function buscarPorPeriodo(dataInicio, dataFim) {
+//   return await db.getAllAsync(
 //     'SELECT * FROM transacoes WHERE data BETWEEN ? AND ? ORDER BY data DESC',
 //     [dataInicio, dataFim]
 //   );

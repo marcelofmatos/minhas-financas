@@ -3,7 +3,7 @@
 **Módulo 06 — Aula 05**  
 Prof. Marcelo Matos
 
-> Continue com o projeto `minhas-financas`. Vamos substituir o AsyncStorage por SQLite — um banco de dados relacional que roda direto no dispositivo.
+> Continue com o projeto `minhas-financas`. Vamos substituir o AsyncStorage por SQLite — um banco de dados relacional que roda direto no dispositivo. A aula funciona em **celular, emulador e Expo Web** — para o web é preciso configurar o `metro.config.js` (Passo 2.2).
 
 ---
 
@@ -123,12 +123,12 @@ mkdir database
 // database/db.js
 import * as SQLite from 'expo-sqlite';
 
-// Abre (ou cria) o banco de dados
-const db = SQLite.openDatabaseSync('minhasfinancas.db');
+let db;
 
 // Cria a tabela se ainda não existir
-export function inicializarBanco() {
-  db.execSync(`
+export async function inicializarBanco() {
+  db = await SQLite.openDatabaseAsync('minhasfinancas.db');
+  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS transacoes (
       id        TEXT PRIMARY KEY,
       descricao TEXT NOT NULL,
@@ -141,31 +141,31 @@ export function inicializarBanco() {
 }
 
 // Retorna todas as transações, mais recentes primeiro
-export function buscarTodasTransacoes() {
-  return db.getAllSync(
+export async function buscarTodasTransacoes() {
+  return await db.getAllAsync(
     'SELECT * FROM transacoes ORDER BY rowid DESC'
   );
 }
 
 // Insere uma nova transação
-export function inserirTransacao(t) {
-  db.runSync(
+export async function inserirTransacao(t) {
+  await db.runAsync(
     'INSERT INTO transacoes (id, descricao, valor, tipo, categoria, data) VALUES (?, ?, ?, ?, ?, ?)',
     [t.id, t.descricao, t.valor, t.tipo, t.categoria, t.data]
   );
 }
 
 // Remove uma transação pelo id
-export function excluirTransacao(id) {
-  db.runSync('DELETE FROM transacoes WHERE id = ?', [id]);
+export async function excluirTransacao(id) {
+  await db.runAsync('DELETE FROM transacoes WHERE id = ?', [id]);
 }
 
 // ---------------------------------------------------------------------------
 // Bônus — STEPS.md Passo 4.2 (debug opcional)
 // Descomente temporariamente para inspecionar o conteúdo da tabela no console.
 // ---------------------------------------------------------------------------
-// export function logTransacoes() {
-//   const dados = db.getAllSync('SELECT * FROM transacoes');
+// export async function logTransacoes() {
+//   const dados = await db.getAllAsync('SELECT * FROM transacoes');
 //   console.log('Transações no banco:', JSON.stringify(dados, null, 2));
 // }
 
@@ -177,16 +177,16 @@ export function excluirTransacao(id) {
 // ---------------------------------------------------------------------------
 
 // Busca apenas despesas de uma categoria
-// export function buscarPorCategoria(categoria) {
-//   return db.getAllSync(
+// export async function buscarPorCategoria(categoria) {
+//   return await db.getAllAsync(
 //     'SELECT * FROM transacoes WHERE categoria = ? ORDER BY rowid DESC',
 //     [categoria]
 //   );
 // }
 
 // Soma total por tipo
-// export function totalPorTipo(tipo) {
-//   const resultado = db.getFirstSync(
+// export async function totalPorTipo(tipo) {
+//   const resultado = await db.getFirstAsync(
 //     'SELECT SUM(valor) as total FROM transacoes WHERE tipo = ?',
 //     [tipo]
 //   );
@@ -194,13 +194,15 @@ export function excluirTransacao(id) {
 // }
 
 // Busca transações de um período
-// export function buscarPorPeriodo(dataInicio, dataFim) {
-//   return db.getAllSync(
+// export async function buscarPorPeriodo(dataInicio, dataFim) {
+//   return await db.getAllAsync(
 //     'SELECT * FROM transacoes WHERE data BETWEEN ? AND ? ORDER BY data DESC',
 //     [dataInicio, dataFim]
 //   );
 // }
 ```
+
+> **Por que `async/await`?** A API moderna do `expo-sqlite` (`openDatabaseAsync`, `execAsync`, `runAsync`, `getAllAsync`) é assíncrona — o banco roda em uma thread separada e não trava a UI. Por isso a `db` só fica disponível **depois** que `inicializarBanco()` terminar; nas demais funções confiamos que o `useEffect` do contexto já chamou esse passo antes.
 
 **Explicando o SQL:**
 
@@ -213,6 +215,29 @@ export function excluirTransacao(id) {
 | `INSERT INTO ... VALUES (?, ?, ...)` | Os `?` são substituídos pelos valores do array |
 | `DELETE FROM ... WHERE id = ?` | Remove apenas a linha com aquele id |
 | `UPDATE ... SET coluna = ? WHERE id = ?` | Modifica colunas de uma linha existente (ver **Referência Rápida — R1**) |
+
+### 2.2 — Configurar o Metro para o Expo Web
+
+No celular e no emulador o `expo-sqlite` já funciona com o que fizemos até aqui. **Para rodar também no Expo Web é preciso um passo extra**: o navegador executa o SQLite compilado em **WebAssembly** (`.wasm`), e o Metro (o bundler do Expo) não reconhece esse tipo de arquivo por padrão. Sem essa configuração, o app quebra ao abrir no `localhost:8082` com erros como **"Unable to resolve ./wa-sqlite/wa-sqlite.wasm"** ou **"SharedArrayBuffer is not defined"**.
+
+Crie o arquivo `metro.config.js` na **raiz do projeto** (mesma pasta do `App.js` e do `package.json`):
+
+```js
+// metro.config.js
+const { getDefaultConfig } = require('expo/metro-config');
+
+const config = getDefaultConfig(__dirname);
+config.resolver.assetExts.push('wasm');   // permite servir o .wasm como asset
+config.resolver.sourceExts.push('wasm');  // permite o bundler resolver `import` de .wasm
+
+module.exports = config;
+```
+
+Pare o servidor (`Ctrl + C`) e reinicie com `npx expo start`. Em seguida pressione `w` para abrir no navegador.
+
+> **Por que duas linhas?** `assetExts` registra `.wasm` como **asset estático** — para o Metro empacotar e servir o arquivo. `sourceExts` registra `.wasm` como **extensão resolvível pelo bundler** — sem isso, o `import` interno do `expo-sqlite` para `wa-sqlite.wasm` falha na resolução. As duas linhas atuam em camadas diferentes do Metro e ambas são necessárias.
+
+> **E no celular?** Esse arquivo não atrapalha Android nem iOS — o `.wasm` simplesmente não é usado fora do navegador. Ou seja: o mesmo `database/db.js` roda nos três ambientes (Android, iOS, Web), mudando apenas a configuração do Metro.
 
 ---
 
@@ -241,14 +266,16 @@ export function TransacoesProvider({ children }) {
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
-    inicializarBanco();   // cria a tabela se não existir
-    carregarTransacoes();
+    (async () => {
+      await inicializarBanco();   // cria a tabela se não existir
+      await carregarTransacoes();
+    })();
   }, []);
 
-  function carregarTransacoes() {
+  async function carregarTransacoes() {
     try {
       setCarregando(true);
-      const dados = buscarTodasTransacoes();
+      const dados = await buscarTodasTransacoes();
       setTransacoes(dados);
     } catch (erro) {
       console.error('Erro ao carregar transações:', erro);
@@ -257,13 +284,13 @@ export function TransacoesProvider({ children }) {
     }
   }
 
-  function adicionarTransacao(novaTransacao) {
-    inserirTransacao(novaTransacao);
+  async function adicionarTransacao(novaTransacao) {
+    await inserirTransacao(novaTransacao);
     setTransacoes(prev => [novaTransacao, ...prev]);
   }
 
-  function removerTransacao(id) {
-    excluirTransacao(id);
+  async function removerTransacao(id) {
+    await excluirTransacao(id);
     setTransacoes(prev => prev.filter(t => t.id !== id));
   }
 
@@ -305,12 +332,14 @@ export function useTransacoes() {
 
 | Antes (AsyncStorage) | Agora (SQLite) |
 |---|---|
-| `await AsyncStorage.getItem(...)` | `buscarTodasTransacoes()` — síncrono |
-| `await AsyncStorage.setItem(...)` | `inserirTransacao(t)` — síncrono |
-| Salva JSON da lista inteira | Insere/deleta apenas o registro afetado |
-| `async/await` necessário | Sem `async/await` — SQLite sync API |
+| `await AsyncStorage.getItem(...)` direto na tela | `await buscarTodasTransacoes()` no contexto |
+| `await AsyncStorage.setItem(...)` direto na tela | `await inserirTransacao(t)` no contexto |
+| Salva JSON da lista inteira | Insere/deleta apenas o registro afetado (SQL) |
+| `useEffect` síncrono | `useEffect` com IIFE `async` para esperar `inicializarBanco()` |
 
-> **Por que síncrono?** O `expo-sqlite` moderno oferece uma API síncrona (`execSync`, `runSync`, `getAllSync`) que simplifica o código. O banco roda em uma thread separada internamente, então não trava a UI.
+> **Por que `async/await`?** A API moderna do `expo-sqlite` (`openDatabaseAsync`, `execAsync`, `runAsync`, `getAllAsync`) é assíncrona — o banco roda em thread separada e não trava a UI. Por isso todas as funções do contexto também são `async`.
+
+> **E o `useEffect`?** Ele não pode ser `async` diretamente. Usamos uma **IIFE (Immediately Invoked Function Expression)**: declaramos `(async () => { ... })()` para criar uma função `async` interna e já chamá-la. É o padrão idiomático do React para usar `await` dentro de `useEffect`.
 
 ---
 
@@ -330,11 +359,13 @@ Salve todos os arquivos e aguarde o Expo recarregar.
 O bloco já está em `database/db.js` comentado. Descomente temporariamente para inspecionar os dados:
 
 ```jsx
-export function logTransacoes() {
-  const dados = db.getAllSync('SELECT * FROM transacoes');
+export async function logTransacoes() {
+  const dados = await db.getAllAsync('SELECT * FROM transacoes');
   console.log('Transações no banco:', JSON.stringify(dados, null, 2));
 }
 ```
+
+E chame com `await logTransacoes()` no console ou em algum efeito.
 
 ---
 
@@ -346,16 +377,16 @@ Uma das vantagens do SQLite é poder filtrar diretamente no banco, sem carregar 
 
 ```jsx
 // Busca apenas despesas de uma categoria
-export function buscarPorCategoria(categoria) {
-  return db.getAllSync(
+export async function buscarPorCategoria(categoria) {
+  return await db.getAllAsync(
     'SELECT * FROM transacoes WHERE categoria = ? ORDER BY rowid DESC',
     [categoria]
   );
 }
 
 // Soma total por tipo
-export function totalPorTipo(tipo) {
-  const resultado = db.getFirstSync(
+export async function totalPorTipo(tipo) {
+  const resultado = await db.getFirstAsync(
     'SELECT SUM(valor) as total FROM transacoes WHERE tipo = ?',
     [tipo]
   );
@@ -363,8 +394,8 @@ export function totalPorTipo(tipo) {
 }
 
 // Busca transações de um período
-export function buscarPorPeriodo(dataInicio, dataFim) {
-  return db.getAllSync(
+export async function buscarPorPeriodo(dataInicio, dataFim) {
+  return await db.getAllAsync(
     'SELECT * FROM transacoes WHERE data BETWEEN ? AND ? ORDER BY data DESC',
     [dataInicio, dataFim]
   );
@@ -710,8 +741,8 @@ Exemplo de função em JavaScript (referência — não precisa adicionar ao pro
 
 ```jsx
 // Atualiza uma transação existente pelo id
-export function atualizarTransacao(t) {
-  db.runSync(
+export async function atualizarTransacao(t) {
+  await db.runAsync(
     'UPDATE transacoes SET descricao = ?, valor = ?, tipo = ?, categoria = ?, data = ? WHERE id = ?',
     [t.descricao, t.valor, t.tipo, t.categoria, t.data, t.id]
   );
@@ -818,7 +849,7 @@ O **DB Browser for SQLite** é um programa gratuito que abre arquivos `.db` e mo
 | Transações salvas em tabela SQL | ✅ `INSERT INTO` |
 | Carregamento ao abrir o app | ✅ `SELECT * FROM` |
 | Exclusão por id | ✅ `DELETE FROM WHERE` |
-| API síncrona sem async/await | ✅ `expo-sqlite` sync API |
+| API assíncrona com `async/await` | ✅ `expo-sqlite` async API (`openDatabaseAsync`, `runAsync`, `getAllAsync`) |
 | Consultas avançadas (bônus) | ✅ `WHERE`, `SUM`, `BETWEEN` |
 | Boas-vindas só no primeiro acesso | ✅ `AsyncStorage` + `PrimeiroAcessoContext` |
 | Botão excluir na tela de detalhe | ✅ `Alert.alert` + `removerTransacao` + `goBack` |
@@ -842,24 +873,17 @@ Confirme que `inicializarBanco()` é chamado antes de qualquer outra função do
 ### Dados somem após fechar o app
 Verifique se `inserirTransacao(novaTransacao)` está sendo chamado em `adicionarTransacao()` — a função do banco precisa ser chamada antes ou junto com o `setTransacoes`.
 
-### "SharedArrayBuffer is not defined" (erro no web)
-O `expo-sqlite` **não funciona na versão web** (`localhost:8082`). Ele depende de `SharedArrayBuffer`, que os browsers bloqueiam por segurança salvo com configurações especiais de servidor. Isso não é um bug — SQLite é uma tecnologia para dispositivos móveis e não tem suporte web estável no Expo.
+### "Cannot read properties of undefined (reading 'getAllAsync')"
+Significa que alguma função do banco rodou **antes** de `inicializarBanco()` terminar. A `db` só é atribuída ao final daquele `await`. Confirme que o `useEffect` do `TransacoesProvider` espera `inicializarBanco()` antes de chamar `carregarTransacoes()`:
 
-**Solução: teste no emulador Android ou no celular.**
-
-No terminal onde o Expo está rodando, pressione `a` para abrir no emulador Android, ou escaneie o QR code com o **Expo Go** no celular. Todos os recursos do SQLite funcionam normalmente nesses ambientes.
-
-### "Unable to resolve ./wa-sqlite/wa-sqlite.wasm" (erro no web)
-O `expo-sqlite` usa WebAssembly no navegador, e o Metro não reconhece arquivos `.wasm` por padrão. Crie o arquivo `metro.config.js` na raiz do projeto:
-```js
-const { getDefaultConfig } = require('expo/metro-config');
-
-const config = getDefaultConfig(__dirname);
-config.resolver.assetExts.push('wasm');
-
-module.exports = config;
+```jsx
+useEffect(() => {
+  (async () => {
+    await inicializarBanco();
+    await carregarTransacoes();
+  })();
+}, []);
 ```
-Pare o servidor (`Ctrl + C`) e reinicie com `npx expo start`. O erro não aparece ao testar no emulador Android ou celular — apenas na versão web.
 
 > 💡 **Dica — problemas de rede ao abrir no celular?** Se ao escanear o QR code o Expo exibir a tela **"Something went wrong"** (computador e celular em redes diferentes, ou rede Wi-Fi bloqueando conexões locais), reinicie com o parâmetro `--tunnel`:
 >
