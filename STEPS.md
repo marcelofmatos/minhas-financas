@@ -218,7 +218,7 @@ export async function excluirTransacao(id) {
 
 ### 2.2 — Configurar o Metro para o Expo Web
 
-No celular e no emulador o `expo-sqlite` já funciona com o que fizemos até aqui. **Para rodar também no Expo Web é preciso um passo extra**: o navegador executa o SQLite compilado em **WebAssembly** (`.wasm`), e o Metro (o bundler do Expo) não reconhece esse tipo de arquivo por padrão. Sem essa configuração, o app quebra ao abrir no `localhost:8082` com erros como **"Unable to resolve ./wa-sqlite/wa-sqlite.wasm"** ou **"SharedArrayBuffer is not defined"**.
+No celular e no emulador o `expo-sqlite` já funciona com o que fizemos até aqui. **Para rodar também no Expo Web é preciso um passo extra**: o navegador executa o SQLite compilado em **WebAssembly** (`.wasm`), e o Metro (o bundler do Expo) não reconhece esse tipo de arquivo por padrão. Sem essa configuração, o app quebra ao abrir no `localhost:8081` com erros como **"Unable to resolve ./wa-sqlite/wa-sqlite.wasm"** ou **"SharedArrayBuffer is not defined"**.
 
 Crie o arquivo `metro.config.js` na **raiz do projeto** (mesma pasta do `App.js` e do `package.json`):
 
