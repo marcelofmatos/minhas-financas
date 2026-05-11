@@ -1,9 +1,9 @@
-# Passo a Passo — Armazenamento com SQLite
+# Passo a Passo — Geolocalização, Mapas e Câmera
 
-**Módulo 06 — Aula 05**  
+**Módulo 06 — Aula 06**  
 Prof. Marcelo Matos
 
-> Continue com o projeto `minhas-financas`. Vamos substituir o AsyncStorage por SQLite — um banco de dados relacional que roda direto no dispositivo. A aula funciona em **celular, emulador e Expo Web** — para o web é preciso configurar o `metro.config.js` (Passo 2.2).
+> Continue com o projeto `minhas-financas`. Vamos adicionar **localização** às transações, exibi-las em um **mapa interativo** e permitir anexar um **comprovante fotográfico**. O mapa funciona em **Android, iOS e Web** através de uma camada de compatibilidade que troca a implementação conforme a plataforma.
 
 ---
 
@@ -11,113 +11,212 @@ Prof. Marcelo Matos
 
 Ao final deste tutorial, o app terá:
 
-- Banco de dados SQLite criado automaticamente no primeiro acesso
-- Transações salvas em uma tabela SQL (`transacoes`)
-- Operações de INSERT, SELECT e DELETE usando SQL
-- Migração transparente do AsyncStorage para SQLite
-- Tela de boas-vindas só na primeira abertura, com flag persistida em AsyncStorage
-- Botão **Excluir** na tela de detalhe da transação, com confirmação via Alert nativo
-
----
-
-## AsyncStorage × SQLite — Quando usar cada um?
-
-| | AsyncStorage | SQLite |
-|---|---|---|
-| Estrutura | Chave-valor (como um dicionário) | Tabelas com colunas (como planilha) |
-| Consultas | Busca toda a lista, filtra no JS | Filtra diretamente no banco (`WHERE`, `ORDER BY`) |
-| Performance | Boa para poucos dados | Melhor para muitos registros |
-| Ideal para | Preferências, configurações, listas pequenas | Histórico longo, filtros complexos, dados relacionais |
-| Exemplo | `{ "transacoes": "[...]" }` | `SELECT * FROM transacoes WHERE tipo = 'despesa'` |
-
-### Critérios detalhados
-
-| Critério | Manter AsyncStorage | Trocar para SQLite |
-|---|---|---|
-| Tipo de dado | Preferências simples, flags, token, tema, pequenos valores em chave-valor | Dados estruturados, múltiplas tabelas, relacionamentos, histórico, filas locais |
-| Volume de dados | Poucos dados, leitura e escrita ocasionais | Volume crescente, muitos registros ou necessidade de persistência local mais organizada |
-| Consultas | Buscar por chave direta, sem filtros complexos | Filtrar, ordenar, paginar, fazer agregações e joins |
-| Concorrência | Poucas operações simples e isoladas | Mais escrita/leituras concorrentes e necessidade de consistência local |
-| Offline-first | Apenas guardar estado básico do usuário | Cache offline, sincronização posterior e dados locais mais completos |
-| Evolução do produto | App pequeno, sem crescimento forte de regras de dados | App crescendo em complexidade, com modelo de dados mais estável |
-| Manutenção | Menos código e menos estrutura | Mais trabalho inicial, mas melhor organização para dados reais do app |
-
-### Quando trocar para SQLite
-
-Vale trocar para SQLite quando o armazenamento começa a ter pelo menos um destes sinais: você precisa consultar dados por vários critérios, guardar listas grandes, manter consistência local, ou suportar modo offline com dados estruturados. Outro sinal forte é quando o AsyncStorage começa a virar uma "base improvisada" com muitos JSONs, porque aí o custo de manter e evoluir cresce rápido.
-
-### Quando manter AsyncStorage
-
-Se o app só salva tema, idioma, token, onboarding e poucas preferências, AsyncStorage continua suficiente. Também não compensa migrar para SQLite só por "parecer mais profissional", porque isso adiciona schema, migração e mais código sem necessidade prática.
-
-### Regra prática
-
-Se você está usando o armazenamento como **configuração**, fique com AsyncStorage; se está usando como **banco local**, vá para SQLite. Em apps mobile, SQLite é o caminho natural quando os dados precisam ser estruturados, pesquisáveis e preparados para crescer.
-
-**Exemplos:**
-
-- **AsyncStorage:** salvar `theme = dark`, `language = pt-BR`, `hasSeenIntro = true`
-- **SQLite:** salvar usuários, pedidos, tarefas, mensagens, cache de catálogo e relações entre entidades
-
-> **No `minhas-financas`:** a flag de primeiro acesso é configuração (AsyncStorage), e a lista de transações é banco local (SQLite). Por isso convivem os dois — cada armazenamento na sua função.
-
----
-
-## Onde o SQLite aparece em apps reais
-
-O SQLite é o banco de dados mais usado no mundo — está dentro de **todo iPhone, todo Android, todos os principais navegadores e na maioria dos apps móveis**. Ver exemplos do dia a dia ajuda a entender que o que você está aprendendo aqui é exatamente o mesmo padrão usado por apps de milhões de usuários.
-
-### Padrões comuns de uso em apps móveis
-
-| Padrão | Exemplo prático | Por que SQLite |
-|---|---|---|
-| **Histórico de mensagens** | WhatsApp, Telegram, Signal armazenam todas as conversas localmente | Volume alto, busca rápida por contato/data |
-| **Cache offline de dados do servidor** | Instagram e Twitter mostram o feed mesmo sem rede | Permite filtrar e ordenar sem nova requisição |
-| **Conteúdo baixado para offline** | Spotify, YouTube Music, Netflix gerenciam o que está disponível sem internet | Relaciona arquivos, metadados, expiração |
-| **Histórico de atividade** | Strava, Nike Run, Apple Saúde guardam treinos, rotas, métricas | Consultas por período, agregações (`SUM`, `AVG`) |
-| **Notas e produtividade** | Apple Notes, Google Keep, Notion guardam textos e metadados | Busca por título, tags, data |
-| **Histórico do navegador** | Chrome, Safari, Firefox usam SQLite para histórico, favoritos e cookies | Milhões de registros com busca instantânea |
-| **Carrinho e lista de desejos** | Shopee, Amazon, Mercado Livre lembram itens entre sessões | Dados estruturados que sobrevivem ao logout |
-| **Fila de sincronização** | Apps offline-first guardam ações para enviar quando voltar a internet | Marca registros como "pendente" via coluna de status |
-| **Saves de jogos** | A maioria dos jogos mobile guarda progresso, conquistas e configurações | Robusto, transacional, sem servidor |
-
-### Por que tantos apps escolhem SQLite
-
-- **Está embutido no sistema operacional** — Android e iOS já incluem o SQLite, então não há dependência extra para o usuário baixar
-- **Funciona offline por padrão** — não precisa de servidor, ideal para apps que precisam continuar usáveis sem rede
-- **Lida com volume real** — milhares ou milhões de registros sem perder performance, desde que existam índices apropriados
-- **Suporta consultas complexas** — `WHERE`, `JOIN`, `GROUP BY`, `SUM` resolvem no banco o que seria caro em JavaScript
-- **Padrão SQL universal** — o que você aprende aqui vale para PostgreSQL, MySQL, SQL Server e qualquer banco relacional
-
-> **Onde o `minhas-financas` se encaixa nisso?** O app combina dois padrões clássicos: **histórico de atividade** (a tabela `transacoes` cresce com o tempo) e **agregações** (somar receitas e despesas). Esse é o cenário típico em que SQLite brilha — exatamente o mesmo desenho usado por apps de fitness, bancos digitais e ferramentas de produtividade.
+- **Permissão de localização** solicitada ao usuário
+- **Coordenadas capturadas** automaticamente (GPS) ou marcadas manualmente no mapa
+- **Permissão de câmera** solicitada para anexar comprovantes
+- **Foto do comprovante** capturada com a câmera **ou** escolhida da galeria
+- **Tela de Mapa** com pins mostrando onde cada transação foi feita
+- **Tela de Detalhe** com scroll, exibindo a foto do comprovante quando existir
+- **Mapa cross-platform**: usa Google/Apple Maps no celular e OpenStreetMap (Leaflet) no navegador
 
 ---
 
 ## Antes de Começar — Checklist
 
-- [ ] Projeto `minhas-financas` das Aulas 2, 3 e 4 funcionando
-- [ ] AsyncStorage funcionando (aula 4)
+- [ ] Projeto `minhas-financas` das Aulas 2 a 5 funcionando
+- [ ] `database/db.js` usando a API **assíncrona** (`openDatabaseAsync`, `runAsync`, `execAsync`, `getAllAsync`)
+- [ ] `TransacoesProvider` envolvendo o `NavigationContainer` em `App.js`
 - [ ] Terminal aberto na pasta `minhas-financas`
 
 ---
 
-## Passo 1 — Instalar o expo-sqlite
+## Passo 1 — Instalar as dependências
 
 ```bash
-npx expo install expo-sqlite
+npx expo install expo-location react-native-maps expo-image-picker
+npm install leaflet react-leaflet
 ```
 
-> Use `npx expo install` para garantir compatibilidade com sua versão do Expo.
+> Por que dois comandos? `npx expo install` escolhe a versão de cada SDK Expo (`expo-location`, `expo-image-picker`) e do `react-native-maps` que é compatível com a sua versão do Expo. Já `leaflet` e `react-leaflet` são bibliotecas puramente web — instalamos pela versão mais recente do npm.
+
+| Pacote | Função | Plataforma onde executa |
+|---|---|---|
+| `expo-location` | Acessa o GPS | Android / iOS |
+| `react-native-maps` | Mapa nativo | Android / iOS |
+| `expo-image-picker` | Câmera e galeria | Android / iOS / Web |
+| `leaflet` + `react-leaflet` | Mapa OpenStreetMap | Web |
 
 ---
 
-## Passo 2 — Criar o helper do banco de dados
+## Passo 2 — Configurar o `app.json`
 
-### 2.1 — Crie `database/db.js`
+Abra `app.json` e substitua o conteúdo pelo arquivo completo abaixo.  
+As linhas marcadas com `// ← NOVO` são as únicas alterações em relação à aula anterior:
 
-```bash
-mkdir database
+```json
+{
+  "expo": {
+    "name": "minhas-financas",
+    "slug": "minhas-financas",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-location",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Permita o acesso à câmera para fotografar comprovantes."
+        }
+      ]
+    ]
+  }
+}
 ```
+
+> O JSON do `app.json` **não aceita comentários** (`//`). Os marcadores `// ← NOVO` aqui são apenas didáticos — não os digite no arquivo real.
+
+---
+
+## Passo 3 — Criar o hook de localização
+
+### 3.1 — Crie `hooks/useLocalizacao.js`
+
+Este é um arquivo **novo** — crie-o do zero:
+
+```jsx
+// hooks/useLocalizacao.js
+import { useState } from 'react';
+import * as Location from 'expo-location';
+
+export function useLocalizacao() {
+  const [obtendo, setObtendo] = useState(false);
+
+  async function obterLocalizacao() {
+    setObtendo(true);
+    try {
+      // 1. Solicita permissão ao usuário
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        return null; // usuário negou
+      }
+
+      // 2. Obtém as coordenadas atuais
+      const posicao = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      return {
+        latitude: posicao.coords.latitude,
+        longitude: posicao.coords.longitude,
+      };
+    } catch (erro) {
+      console.error('Erro ao obter localização:', erro);
+      return null;
+    } finally {
+      setObtendo(false);
+    }
+  }
+
+  return { obterLocalizacao, obtendo };
+}
+```
+
+---
+
+## Passo 4 — Criar o hook do comprovante (câmera + galeria)
+
+### 4.1 — Crie `hooks/useComprovante.js`
+
+Este é um arquivo **novo** — crie-o do zero:
+
+```jsx
+// hooks/useComprovante.js
+import { useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
+
+export function useComprovante() {
+  const [obtendo, setObtendo] = useState(false);
+
+  // Opção 1 — abre a câmera do dispositivo
+  async function tirarFoto() {
+    setObtendo(true);
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') return null;
+
+      const resultado = await ImagePicker.launchCameraAsync({
+        quality: 0.5,
+        allowsEditing: true,
+        aspect: [3, 4],
+      });
+
+      if (resultado.canceled) return null;
+      return resultado.assets[0].uri;
+    } catch (erro) {
+      console.error('Erro ao tirar foto:', erro);
+      return null;
+    } finally {
+      setObtendo(false);
+    }
+  }
+
+  // Opção 2 — abre a galeria do dispositivo
+  async function escolherDaGaleria() {
+    setObtendo(true);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') return null;
+
+      const resultado = await ImagePicker.launchImageLibraryAsync({
+        quality: 0.5,
+        allowsEditing: true,
+        aspect: [3, 4],
+      });
+
+      if (resultado.canceled) return null;
+      return resultado.assets[0].uri;
+    } catch (erro) {
+      console.error('Erro ao escolher imagem:', erro);
+      return null;
+    } finally {
+      setObtendo(false);
+    }
+  }
+
+  return { tirarFoto, escolherDaGaleria, obtendo };
+}
+```
+
+---
+
+## Passo 5 — Adicionar localização e comprovante ao banco
+
+### 5.1 — Atualizar `database/db.js`
+
+Substitua o conteúdo **completo** do arquivo pelo código abaixo.  
+As linhas marcadas com `// ← NOVO` são as únicas alterações em relação à aula anterior:
 
 ```jsx
 // database/db.js
@@ -130,14 +229,28 @@ export async function inicializarBanco() {
   db = await SQLite.openDatabaseAsync('minhasfinancas.db');
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS transacoes (
-      id        TEXT PRIMARY KEY,
-      descricao TEXT NOT NULL,
-      valor     REAL NOT NULL,
-      tipo      TEXT NOT NULL,
-      categoria TEXT NOT NULL,
-      data      TEXT NOT NULL
+      id          TEXT PRIMARY KEY,
+      descricao   TEXT NOT NULL,
+      valor       REAL NOT NULL,
+      tipo        TEXT NOT NULL,
+      categoria   TEXT NOT NULL,
+      data        TEXT NOT NULL,
+      latitude    REAL,     -- ← NOVO
+      longitude   REAL,     -- ← NOVO
+      comprovante TEXT      -- ← NOVO (URI da foto do comprovante)
     );
   `);
+
+  // ← NOVO: migração para quem já tinha o banco da aula anterior sem as colunas novas.
+  const colunas = await db.getAllAsync('PRAGMA table_info(transacoes)');
+  const nomes = colunas.map(c => c.name);
+  if (!nomes.includes('latitude')) {
+    await db.execAsync('ALTER TABLE transacoes ADD COLUMN latitude REAL');
+    await db.execAsync('ALTER TABLE transacoes ADD COLUMN longitude REAL');
+  }
+  if (!nomes.includes('comprovante')) {
+    await db.execAsync('ALTER TABLE transacoes ADD COLUMN comprovante TEXT');
+  }
 }
 
 // Retorna todas as transações, mais recentes primeiro
@@ -150,8 +263,20 @@ export async function buscarTodasTransacoes() {
 // Insere uma nova transação
 export async function inserirTransacao(t) {
   await db.runAsync(
-    'INSERT INTO transacoes (id, descricao, valor, tipo, categoria, data) VALUES (?, ?, ?, ?, ?, ?)',
-    [t.id, t.descricao, t.valor, t.tipo, t.categoria, t.data]
+    `INSERT INTO transacoes
+      (id, descricao, valor, tipo, categoria, data, latitude, longitude, comprovante)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,                    // ← NOVO: 3 parâmetros a mais
+    [
+      t.id,
+      t.descricao,
+      t.valor,
+      t.tipo,
+      t.categoria,
+      t.data,
+      t.latitude    ?? null,   // ← NOVO
+      t.longitude   ?? null,   // ← NOVO
+      t.comprovante ?? null,   // ← NOVO
+    ]
   );
 }
 
@@ -159,423 +284,633 @@ export async function inserirTransacao(t) {
 export async function excluirTransacao(id) {
   await db.runAsync('DELETE FROM transacoes WHERE id = ?', [id]);
 }
-
-// ---------------------------------------------------------------------------
-// Bônus — STEPS.md Passo 4.2 (debug opcional)
-// Descomente temporariamente para inspecionar o conteúdo da tabela no console.
-// ---------------------------------------------------------------------------
-// export async function logTransacoes() {
-//   const dados = await db.getAllAsync('SELECT * FROM transacoes');
-//   console.log('Transações no banco:', JSON.stringify(dados, null, 2));
-// }
-
-// ---------------------------------------------------------------------------
-// Bônus — STEPS.md Passo 5 (consultas avançadas com SQL)
-// Demonstram o poder do SQL para filtrar diretamente no banco, sem trazer
-// tudo para o JavaScript. Não são usadas na tela ainda — descomente quando
-// for consumir em algum componente.
-// ---------------------------------------------------------------------------
-
-// Busca apenas despesas de uma categoria
-// export async function buscarPorCategoria(categoria) {
-//   return await db.getAllAsync(
-//     'SELECT * FROM transacoes WHERE categoria = ? ORDER BY rowid DESC',
-//     [categoria]
-//   );
-// }
-
-// Soma total por tipo
-// export async function totalPorTipo(tipo) {
-//   const resultado = await db.getFirstAsync(
-//     'SELECT SUM(valor) as total FROM transacoes WHERE tipo = ?',
-//     [tipo]
-//   );
-//   return resultado?.total ?? 0;
-// }
-
-// Busca transações de um período
-// export async function buscarPorPeriodo(dataInicio, dataFim) {
-//   return await db.getAllAsync(
-//     'SELECT * FROM transacoes WHERE data BETWEEN ? AND ? ORDER BY data DESC',
-//     [dataInicio, dataFim]
-//   );
-// }
 ```
 
-> **Por que `async/await`?** A API moderna do `expo-sqlite` (`openDatabaseAsync`, `execAsync`, `runAsync`, `getAllAsync`) é assíncrona — o banco roda em uma thread separada e não trava a UI. Por isso a `db` só fica disponível **depois** que `inicializarBanco()` terminar; nas demais funções confiamos que o `useEffect` do contexto já chamou esse passo antes.
-
-**Explicando o SQL:**
-
-| Comando | O que faz |
-|---------|-----------|
-| `CREATE TABLE IF NOT EXISTS` | Cria a tabela só se ela ainda não existir |
-| `TEXT`, `REAL` | Tipos de coluna: texto e número decimal |
-| `PRIMARY KEY` | Garante que o `id` é único |
-| `SELECT * FROM ... ORDER BY rowid DESC` | Busca tudo, mais recentes primeiro |
-| `INSERT INTO ... VALUES (?, ?, ...)` | Os `?` são substituídos pelos valores do array |
-| `DELETE FROM ... WHERE id = ?` | Remove apenas a linha com aquele id |
-| `UPDATE ... SET coluna = ? WHERE id = ?` | Modifica colunas de uma linha existente (ver **Referência Rápida — R1**) |
-
-### 2.2 — Configurar o Metro para o Expo Web
-
-No celular e no emulador o `expo-sqlite` já funciona com o que fizemos até aqui. **Para rodar também no Expo Web é preciso um passo extra**: o navegador executa o SQLite compilado em **WebAssembly** (`.wasm`), e o Metro (o bundler do Expo) não reconhece esse tipo de arquivo por padrão. Sem essa configuração, o app quebra ao abrir no `localhost:8081` com erros como **"Unable to resolve ./wa-sqlite/wa-sqlite.wasm"** ou **"SharedArrayBuffer is not defined"**.
-
-Crie o arquivo `metro.config.js` na **raiz do projeto** (mesma pasta do `App.js` e do `package.json`):
-
-```js
-// metro.config.js
-const { getDefaultConfig } = require('expo/metro-config');
-
-const config = getDefaultConfig(__dirname);
-config.resolver.assetExts.push('wasm');   // permite servir o .wasm como asset
-config.resolver.sourceExts.push('wasm');  // permite o bundler resolver `import` de .wasm
-
-module.exports = config;
-```
-
-Pare o servidor (`Ctrl + C`) e reinicie com `npx expo start`. Em seguida pressione `w` para abrir no navegador.
-
-> **Por que duas linhas?** `assetExts` registra `.wasm` como **asset estático** — para o Metro empacotar e servir o arquivo. `sourceExts` registra `.wasm` como **extensão resolvível pelo bundler** — sem isso, o `import` interno do `expo-sqlite` para `wa-sqlite.wasm` falha na resolução. As duas linhas atuam em camadas diferentes do Metro e ambas são necessárias.
-
-> **E no celular?** Esse arquivo não atrapalha Android nem iOS — o `.wasm` simplesmente não é usado fora do navegador. Ou seja: o mesmo `database/db.js` roda nos três ambientes (Android, iOS, Web), mudando apenas a configuração do Metro.
+> As três novas colunas (`latitude`, `longitude`, `comprovante`) são **opcionais** — se o usuário negar a permissão ou simplesmente não usar o recurso, a transação é salva com `null` nesses campos.
 
 ---
 
-## Passo 3 — Atualizar o TransacoesContext
+## Passo 6 — Criar a camada de compatibilidade do mapa
 
-Substitua o uso de AsyncStorage pelo SQLite no contexto.
+**Por que precisamos disso?** O `react-native-maps` é nativo (Java/Kotlin no Android, Swift no iOS) e não funciona no navegador — se você abrir o app pelo `expo start --web`, o bundler falha com `Importing native-only module ... codegenNativeCommands`. Já o `react-leaflet` funciona perfeitamente na web mas não no celular.
 
-### 3.1 — Substitua o conteúdo completo de `context/TransacoesContext.js`
+A solução idiomática do React Native são as **extensões de plataforma**: `.native.js` (carregado no Android/iOS) e `.web.js` (carregado no navegador). O Metro escolhe automaticamente o arquivo certo. Criamos um wrapper `MapaCompat` que expõe a mesma API nos dois ambientes.
 
-> ⚠️ **Atenção:** copie e cole o arquivo inteiro abaixo.
+### 6.1 — Crie `components/MapaCompat.native.js`
+
+Este é um arquivo **novo** — crie-o do zero. Ele simplesmente repassa o que vem do `react-native-maps`:
 
 ```jsx
-// context/TransacoesContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// components/MapaCompat.native.js
+// Em iOS/Android, MapaCompat é apenas um re-export do react-native-maps.
+// O Metro escolhe este arquivo automaticamente; MapaCompat.web.js usa Leaflet.
+import MapView, { Marker, Callout } from 'react-native-maps';
+
+export { MapView, Marker, Callout };
+export default MapView;
+```
+
+### 6.2 — Crie `components/MapaCompat.web.js`
+
+Este é um arquivo **novo** — crie-o do zero. Ele reimplementa a API do `react-native-maps` em cima do `react-leaflet`:
+
+```jsx
+// components/MapaCompat.web.js
+// Implementação web da API do react-native-maps usando Leaflet + OpenStreetMap.
+// Expõe MapView, Marker e Callout com a mesma assinatura usada no native,
+// para que MapaScreen e SeletorLocalMapa funcionem nos dois ambientes.
+import React, {
+  forwardRef, useImperativeHandle, useRef, useEffect, useMemo,
+} from 'react';
+
+// Injeta o CSS do Leaflet via <link> em vez de `import 'leaflet/dist/leaflet.css'`.
+// Motivo: o Metro do Expo Web ainda não resolve `url(images/...)` dentro de arquivos
+// CSS de node_modules, gerando warnings. Carregar o CSS direto da CDN evita o problema —
+// a CDN serve o arquivo com paths absolutos já resolvidos.
+if (typeof document !== 'undefined' && !document.getElementById('leaflet-css')) {
+  const link = document.createElement('link');
+  link.id = 'leaflet-css';
+  link.rel = 'stylesheet';
+  link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+  link.crossOrigin = '';
+  document.head.appendChild(link);
+}
+import { View } from 'react-native';
 import {
-  inicializarBanco,
-  buscarTodasTransacoes,
-  inserirTransacao,
-  excluirTransacao,
-} from '../database/db';
+  MapContainer, TileLayer, Marker as LMarker, Popup, useMap, useMapEvents,
+} from 'react-leaflet';
+import L from 'leaflet';
 
-const TransacoesContext = createContext(null);
+// L.Icon.Default sobrescreve _getIconUrl para prefixar `imagePath` (detectado
+// a partir do <link> do leaflet.css) na URL — isso ignora URLs absolutas e
+// resulta em pin em branco. Deletar o método força o fallback para o
+// _getIconUrl da classe base, que apenas lê options.iconUrl literalmente.
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
 
-export function TransacoesProvider({ children }) {
-  const [transacoes, setTransacoes] = useState([]);
-  const [carregando, setCarregando] = useState(true);
+// Converte a região do react-native-maps {latitude, longitude, *Delta}
+// em centro + zoom do Leaflet.
+function regiaoParaLeaflet({ latitude, longitude, latitudeDelta, longitudeDelta }) {
+  const delta = Math.max(latitudeDelta || 0.1, longitudeDelta || 0.1);
+  const zoom = Math.max(2, Math.min(18, Math.round(Math.log2(360 / delta))));
+  return { center: [latitude, longitude], zoom };
+}
 
-  useEffect(() => {
-    (async () => {
-      await inicializarBanco();   // cria a tabela se não existir
-      await carregarTransacoes();
-    })();
-  }, []);
+// Subcomponente que captura cliques no mapa e dispara onPress no formato
+// do react-native-maps: { nativeEvent: { coordinate: { latitude, longitude } } }
+function CaptadorDeClique({ onPress }) {
+  useMapEvents({
+    click: (e) => {
+      if (!onPress) return;
+      onPress({
+        nativeEvent: {
+          coordinate: { latitude: e.latlng.lat, longitude: e.latlng.lng },
+        },
+      });
+    },
+  });
+  return null;
+}
 
-  async function carregarTransacoes() {
-    try {
-      setCarregando(true);
-      const dados = await buscarTodasTransacoes();
-      setTransacoes(dados);
-    } catch (erro) {
-      console.error('Erro ao carregar transações:', erro);
-    } finally {
-      setCarregando(false);
+// Expõe a instância do mapa para o ref imperativo (fitToCoordinates).
+function PonteDoMapa({ aoCarregar }) {
+  const map = useMap();
+  useEffect(() => { aoCarregar(map); }, [map, aoCarregar]);
+  return null;
+}
+
+export const MapView = forwardRef(function MapView(props, ref) {
+  const { style, initialRegion, onPress, onMapReady, children } = props;
+  const mapRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    fitToCoordinates(coords, opcoes = {}) {
+      if (!mapRef.current || !coords || coords.length === 0) return;
+      const bounds = coords.map(c => [c.latitude, c.longitude]);
+      const pad = opcoes.edgePadding || {};
+      mapRef.current.fitBounds(bounds, {
+        paddingTopLeft:     [pad.left  ?? 0, pad.top    ?? 0],
+        paddingBottomRight: [pad.right ?? 0, pad.bottom ?? 0],
+        animate: opcoes.animated !== false,
+      });
+    },
+  }), []);
+
+  const { center, zoom } = useMemo(
+    () => regiaoParaLeaflet(initialRegion || { latitude: 0, longitude: 0 }),
+    [initialRegion]
+  );
+
+  return (
+    <View style={style}>
+      <MapContainer center={center} zoom={zoom} style={{ height: '100%', width: '100%' }}>
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        />
+        <CaptadorDeClique onPress={onPress} />
+        <PonteDoMapa aoCarregar={(map) => {
+          mapRef.current = map;
+          if (onMapReady) onMapReady();
+        }} />
+        {children}
+      </MapContainer>
+    </View>
+  );
+});
+
+// Marker — recebe coordinate e pinColor; usa DivIcon para colorir o pin.
+// Sem pinColor, NÃO passamos a prop `icon` (o Leaflet usa L.Icon.Default — ver
+// L.Icon.Default.mergeOptions no topo do arquivo). Passar `icon={undefined}`
+// explicitamente quebra: o react-leaflet grava options.icon = undefined e o
+// Leaflet estoura com "options.icon is undefined" ao tentar createIcon().
+export function Marker({ coordinate, pinColor, children }) {
+  const icon = useMemo(() => {
+    if (!pinColor) return null;
+    return L.divIcon({
+      className: '',
+      iconSize: [22, 30],
+      iconAnchor: [11, 30],
+      popupAnchor: [0, -28],
+      html: `
+        <svg width="22" height="30" viewBox="0 0 22 30" xmlns="http://www.w3.org/2000/svg">
+          <path d="M11 0C4.9 0 0 4.9 0 11c0 8 11 19 11 19s11-11 11-19c0-6.1-4.9-11-11-11z"
+                fill="${pinColor}" stroke="white" stroke-width="2"/>
+          <circle cx="11" cy="11" r="4" fill="white"/>
+        </svg>`,
+    });
+  }, [pinColor]);
+
+  const position = [coordinate.latitude, coordinate.longitude];
+  return icon ? (
+    <LMarker position={position} icon={icon}>{children}</LMarker>
+  ) : (
+    <LMarker position={position}>{children}</LMarker>
+  );
+}
+
+// Callout — no native vira balão ao tocar no pin; no web é um Popup do Leaflet.
+export function Callout({ children }) {
+  return <Popup>{children}</Popup>;
+}
+
+export default MapView;
+```
+
+> **Vale a pena ler com calma:** essa é a parte mais densa da aula. O resumo é: **mesmo nome, mesma API, implementação diferente**. Quem importar de `./MapaCompat` recebe o `MapView`, `Marker` e `Callout` certos para o ambiente atual sem precisar saber em qual está rodando.
+
+---
+
+## Passo 7 — Criar o componente do seletor de local
+
+### 7.1 — Crie `components/SeletorLocalMapa.js`
+
+Este é um arquivo **novo** — crie-o do zero. Ele encapsula o modal com mapa que aparece quando o usuário toca em "Escolher no mapa". Como usa `MapaCompat`, funciona nas três plataformas:
+
+```jsx
+// components/SeletorLocalMapa.js
+// Modal com mapa para o usuário tocar e escolher um ponto.
+// Funciona no Android/iOS (react-native-maps) e no web (Leaflet) via MapaCompat.
+import React, { useState } from 'react';
+import {
+  View, Text, Modal, TouchableOpacity, StyleSheet,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { MapView, Marker } from './MapaCompat';
+import { cores, espacamento, raio } from '../theme';
+
+const REGIAO_BRASIL = {
+  latitude: -2.8235, longitude: -60.6753,
+  latitudeDelta: 0.5, longitudeDelta: 0.5,
+};
+
+export function SeletorLocalMapa({ visivel, localizacaoAtual, onConfirmar, onCancelar }) {
+  const [pinTemp, setPinTemp] = useState(null);
+
+  const regiaoInicial = localizacaoAtual
+    ? { ...localizacaoAtual, latitudeDelta: 0.05, longitudeDelta: 0.05 }
+    : REGIAO_BRASIL;
+
+  function confirmar() {
+    if (pinTemp) onConfirmar(pinTemp);
+    setPinTemp(null);
+  }
+
+  function cancelar() {
+    setPinTemp(null);
+    onCancelar();
+  }
+
+  return (
+    <Modal visible={visivel} animationType="slide" onRequestClose={cancelar}>
+      <SafeAreaView style={styles.modal}>
+        <Text style={styles.instrucao}>Toque no mapa para marcar o local</Text>
+        <MapView
+          style={styles.mapa}
+          initialRegion={regiaoInicial}
+          onPress={e => setPinTemp(e.nativeEvent.coordinate)}
+        >
+          {pinTemp && <Marker coordinate={pinTemp} />}
+        </MapView>
+        <View style={styles.botoes}>
+          <TouchableOpacity style={styles.botaoCancelar} onPress={cancelar}>
+            <Text style={styles.textoCancelar}>Cancelar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.botaoConfirmar, !pinTemp && { opacity: 0.4 }]}
+            onPress={confirmar}
+            disabled={!pinTemp}
+          >
+            <Ionicons name="checkmark" size={18} color="#fff" />
+            <Text style={styles.textoConfirmar}>Confirmar local</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  modal: { flex: 1, backgroundColor: '#fff' },
+  instrucao: {
+    textAlign: 'center', padding: espacamento.sm,
+    fontSize: 14, fontWeight: '600', color: cores.texto,
+  },
+  mapa: { flex: 1 },
+  botoes: {
+    flexDirection: 'row', gap: 12,
+    padding: espacamento.md, borderTopWidth: 1, borderTopColor: '#eee',
+  },
+  botaoCancelar: {
+    flex: 1, padding: 14, borderRadius: raio.md,
+    borderWidth: 1, borderColor: '#ddd', alignItems: 'center',
+  },
+  textoCancelar: { fontSize: 15, fontWeight: '600', color: '#555' },
+  botaoConfirmar: {
+    flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, padding: 14, borderRadius: raio.md, backgroundColor: cores.primaria,
+  },
+  textoConfirmar: { fontSize: 15, fontWeight: '700', color: '#fff' },
+});
+```
+
+---
+
+## Passo 8 — Atualizar a tela de Nova Transação
+
+### 8.1 — Substituir `screens/NovaTransacaoScreen.js`
+
+Substitua o conteúdo **completo** do arquivo pelo código abaixo.  
+As linhas marcadas com `// ← NOVO` são as únicas alterações em relação à aula anterior:
+
+```jsx
+// screens/NovaTransacaoScreen.js
+import React, { useState } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity,
+  ScrollView, StyleSheet, Alert, Image                   // ← NOVO: Image
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { cores, espacamento, raio } from '../theme';
+import { useTransacoes } from '../context/TransacoesContext';
+import { useLocalizacao } from '../hooks/useLocalizacao';                 // ← NOVO
+import { useComprovante } from '../hooks/useComprovante';                 // ← NOVO
+import { SeletorLocalMapa } from '../components/SeletorLocalMapa';        // ← NOVO
+
+const CATEGORIAS = [
+  { id: 'alimentacao', label: 'Alimentação', icone: 'restaurant' },
+  { id: 'transporte', label: 'Transporte', icone: 'car' },
+  { id: 'saude', label: 'Saúde', icone: 'medical' },
+  { id: 'lazer', label: 'Lazer', icone: 'game-controller' },
+  { id: 'moradia', label: 'Moradia', icone: 'home' },
+  { id: 'salario', label: 'Salário', icone: 'cash' },
+  { id: 'outros', label: 'Outros', icone: 'ellipsis-horizontal-circle' },
+];
+
+export function NovaTransacaoScreen({ navigation }) {
+  const [descricao, setDescricao] = useState('');
+  const [valor, setValor] = useState('');
+  const [tipo, setTipo] = useState('despesa');
+  const [categoria, setCategoria] = useState('outros');
+  const [localizacao, setLocalizacao] = useState(null);  // ← NOVO
+  const [modalVisivel, setModalVisivel] = useState(false); // ← NOVO
+  const [comprovante, setComprovante] = useState(null);    // ← NOVO
+
+  const { adicionarTransacao } = useTransacoes();
+  const { obterLocalizacao, obtendo: obtendoLoc } = useLocalizacao();   // ← NOVO
+  const { tirarFoto, escolherDaGaleria, obtendo: obtendoFoto } = useComprovante(); // ← NOVO
+
+  // ← NOVO: opção 1 — usa o GPS do dispositivo
+  async function capturarGPS() {
+    const coords = await obterLocalizacao();
+    if (coords) setLocalizacao(coords);
+  }
+
+  // ← NOVO: opção 2 — recebe o ponto escolhido pelo SeletorLocalMapa
+  function confirmarPinDoMapa(coords) {
+    setLocalizacao(coords);
+    setModalVisivel(false);
+  }
+
+  // ← NOVO: comprovante — câmera
+  async function capturarComCamera() {
+    const uri = await tirarFoto();
+    if (uri) setComprovante(uri);
+  }
+
+  // ← NOVO: comprovante — galeria
+  async function selecionarDaGaleria() {
+    const uri = await escolherDaGaleria();
+    if (uri) setComprovante(uri);
+  }
+
+  // ← NOVO: remove a foto anexada
+  function removerComprovante() {
+    setComprovante(null);
+  }
+
+  const salvar = async () => {
+    if (!descricao.trim()) {
+      Alert.alert('Atenção', 'Digite uma descrição.');
+      return;
     }
-  }
+    const valorNumerico = parseFloat(valor.replace(',', '.'));
+    if (!valor || isNaN(valorNumerico) || valorNumerico <= 0) {
+      Alert.alert('Atenção', 'Digite um valor válido.');
+      return;
+    }
 
-  async function adicionarTransacao(novaTransacao) {
-    await inserirTransacao(novaTransacao);
-    setTransacoes(prev => [novaTransacao, ...prev]);
-  }
+    await adicionarTransacao({
+      id: Date.now().toString(),
+      descricao: descricao.trim(),
+      valor: valorNumerico,
+      tipo,
+      categoria,
+      data: new Date().toLocaleDateString('pt-BR'),
+      latitude:    localizacao?.latitude  ?? null, // ← NOVO
+      longitude:   localizacao?.longitude ?? null, // ← NOVO
+      comprovante: comprovante ?? null,            // ← NOVO
+    });
 
-  async function removerTransacao(id) {
-    await excluirTransacao(id);
-    setTransacoes(prev => prev.filter(t => t.id !== id));
-  }
+    setDescricao('');
+    setValor('');
+    setTipo('despesa');
+    setCategoria('outros');
+    setLocalizacao(null);   // ← NOVO
+    setComprovante(null);   // ← NOVO
 
-  const receitas = transacoes
-    .filter(t => t.tipo === 'receita')
-    .reduce((soma, t) => soma + t.valor, 0);
-
-  const despesas = transacoes
-    .filter(t => t.tipo === 'despesa')
-    .reduce((soma, t) => soma + t.valor, 0);
-
-  const valor = {
-    transacoes,
-    carregando,
-    receitas,
-    despesas,
-    saldo: receitas - despesas,
-    adicionarTransacao,
-    removerTransacao,
+    navigation.navigate('Dashboard');
   };
 
   return (
-    <TransacoesContext.Provider value={valor}>
-      {children}
-    </TransacoesContext.Provider>
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      <Text style={styles.tituloPagina}>Nova Transação</Text>
+
+      <Text style={styles.label}>Tipo</Text>
+      <View style={styles.seletor}>
+        {['receita', 'despesa'].map(t => (
+          <TouchableOpacity
+            key={t}
+            style={[
+              styles.botaoTipo,
+              tipo === t && { backgroundColor: t === 'receita' ? cores.receita : cores.despesa }
+            ]}
+            onPress={() => setTipo(t)}
+          >
+            <Ionicons
+              name={t === 'receita' ? 'arrow-up' : 'arrow-down'}
+              size={18}
+              color={tipo === t ? '#fff' : '#555'}
+            />
+            <Text style={[styles.textoTipo, tipo === t && { color: '#fff' }]}>
+              {t === 'receita' ? 'Receita' : 'Despesa'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={styles.label}>Descrição</Text>
+      <TextInput
+        style={styles.input}
+        value={descricao}
+        onChangeText={setDescricao}
+        placeholder="Ex: Supermercado, Salário..."
+        maxLength={50}
+        returnKeyType="next"
+      />
+
+      <Text style={styles.label}>Valor (R$)</Text>
+      <TextInput
+        style={styles.input}
+        value={valor}
+        onChangeText={setValor}
+        placeholder="0,00"
+        keyboardType="decimal-pad"
+        returnKeyType="done"
+      />
+
+      <Text style={styles.label}>Categoria</Text>
+      <View style={styles.categorias}>
+        {CATEGORIAS.map(cat => (
+          <TouchableOpacity
+            key={cat.id}
+            style={[styles.chipCategoria, categoria === cat.id && styles.chipAtivo]}
+            onPress={() => setCategoria(cat.id)}
+          >
+            <Ionicons
+              name={cat.icone}
+              size={16}
+              color={categoria === cat.id ? '#fff' : cores.subtexto}
+            />
+            <Text style={[styles.textoChip, categoria === cat.id && { color: '#fff' }]}>
+              {cat.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* ← NOVO: dois botões de localização lado a lado */}
+      <Text style={styles.label}>Localização (opcional)</Text>
+      <View style={styles.botoesAcao}>
+        <TouchableOpacity
+          style={[styles.botaoAcao, localizacao && styles.botaoAcaoAtivo]}
+          onPress={capturarGPS}
+          disabled={obtendoLoc}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="locate" size={18} color={localizacao ? '#fff' : cores.primaria} />
+          <Text style={[styles.textoAcao, localizacao && { color: '#fff' }]}>
+            {obtendoLoc ? 'Obtendo...' : 'Minha localização'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.botaoAcao, localizacao && styles.botaoAcaoAtivo]}
+          onPress={() => setModalVisivel(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="map" size={18} color={localizacao ? '#fff' : cores.primaria} />
+          <Text style={[styles.textoAcao, localizacao && { color: '#fff' }]}>
+            Escolher no mapa
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {localizacao && (
+        <Text style={styles.infoAuxiliar}>
+          📍 {localizacao.latitude.toFixed(5)}, {localizacao.longitude.toFixed(5)}
+        </Text>
+      )}
+
+      {/* ← NOVO: dois botões de comprovante lado a lado */}
+      <Text style={styles.label}>Comprovante (opcional)</Text>
+      <View style={styles.botoesAcao}>
+        <TouchableOpacity
+          style={[styles.botaoAcao, comprovante && styles.botaoAcaoAtivo]}
+          onPress={capturarComCamera}
+          disabled={obtendoFoto}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="camera" size={18} color={comprovante ? '#fff' : cores.primaria} />
+          <Text style={[styles.textoAcao, comprovante && { color: '#fff' }]}>
+            {obtendoFoto ? 'Abrindo...' : 'Tirar foto'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.botaoAcao, comprovante && styles.botaoAcaoAtivo]}
+          onPress={selecionarDaGaleria}
+          disabled={obtendoFoto}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="image" size={18} color={comprovante ? '#fff' : cores.primaria} />
+          <Text style={[styles.textoAcao, comprovante && { color: '#fff' }]}>
+            Da galeria
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ← NOVO: preview da foto + botão para remover */}
+      {comprovante && (
+        <View style={styles.previewWrapper}>
+          <Image source={{ uri: comprovante }} style={styles.preview} />
+          <TouchableOpacity style={styles.botaoRemoverFoto} onPress={removerComprovante}>
+            <Ionicons name="close-circle" size={28} color={cores.despesa} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ← NOVO: modal de seleção de local — funciona no native e no web */}
+      <SeletorLocalMapa
+        visivel={modalVisivel}
+        localizacaoAtual={localizacao}
+        onConfirmar={confirmarPinDoMapa}
+        onCancelar={() => setModalVisivel(false)}
+      />
+
+      <TouchableOpacity style={styles.botaoSalvar} onPress={salvar} activeOpacity={0.8}>
+        <Ionicons name="checkmark" size={22} color="#fff" />
+        <Text style={styles.textoBotao}>Salvar Transação</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
-export function useTransacoes() {
-  const contexto = useContext(TransacoesContext);
-  if (!contexto) {
-    throw new Error('useTransacoes precisa estar dentro de <TransacoesProvider>');
-  }
-  return contexto;
-}
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: cores.fundo, padding: espacamento.md },
+  tituloPagina: {
+    fontSize: 22, fontWeight: 'bold', color: cores.texto,
+    marginTop: espacamento.lg, marginBottom: espacamento.lg,
+  },
+  label: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: espacamento.xs },
+  input: {
+    borderWidth: 1, borderColor: '#ddd', borderRadius: raio.sm,
+    padding: 12, fontSize: 16, marginBottom: espacamento.md,
+    backgroundColor: '#fff',
+  },
+  seletor: { flexDirection: 'row', gap: 12, marginBottom: espacamento.md },
+  botaoTipo: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, padding: 12, borderRadius: raio.sm,
+    borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff',
+  },
+  textoTipo: { fontSize: 15, fontWeight: '600', color: '#555' },
+  categorias: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: espacamento.lg },
+  chipCategoria: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingVertical: 6, paddingHorizontal: 12,
+    borderRadius: raio.pill, borderWidth: 1, borderColor: '#ddd',
+    backgroundColor: '#fff',
+  },
+  chipAtivo: { backgroundColor: cores.primaria, borderColor: cores.primaria },
+  textoChip: { fontSize: 13, color: cores.subtexto },
+
+  // ← NOVO: botões de ação (localização e comprovante reutilizam o mesmo estilo)
+  botoesAcao: { flexDirection: 'row', gap: 10, marginBottom: espacamento.xs },
+  botaoAcao: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, padding: 12, borderRadius: raio.md,
+    borderWidth: 1, borderColor: cores.primaria, backgroundColor: '#fff',
+  },
+  botaoAcaoAtivo: { backgroundColor: cores.primaria, borderColor: cores.primaria },
+  textoAcao: { fontSize: 13, fontWeight: '600', color: cores.primaria },
+  infoAuxiliar: { fontSize: 12, color: cores.subtexto, marginBottom: espacamento.md },
+
+  // ← NOVO: preview do comprovante
+  previewWrapper: {
+    alignSelf: 'flex-start',
+    marginVertical: espacamento.md,
+    position: 'relative',
+  },
+  preview: {
+    width: 120, height: 160,
+    borderRadius: raio.md,
+    borderWidth: 1, borderColor: '#ddd',
+    backgroundColor: '#eee',
+  },
+  botaoRemoverFoto: {
+    position: 'absolute', top: -10, right: -10,
+    backgroundColor: '#fff', borderRadius: 14,
+  },
+
+  botaoSalvar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: cores.primaria, padding: 16,
+    borderRadius: raio.md, marginBottom: espacamento.xl,
+    marginTop: espacamento.md,
+  },
+  textoBotao: { color: '#fff', fontSize: 16, fontWeight: '700' },
+});
 ```
-
-**O que mudou em relação à Aula 4:**
-
-| Antes (AsyncStorage) | Agora (SQLite) |
-|---|---|
-| `await AsyncStorage.getItem(...)` direto na tela | `await buscarTodasTransacoes()` no contexto |
-| `await AsyncStorage.setItem(...)` direto na tela | `await inserirTransacao(t)` no contexto |
-| Salva JSON da lista inteira | Insere/deleta apenas o registro afetado (SQL) |
-| `useEffect` síncrono | `useEffect` com IIFE `async` para esperar `inicializarBanco()` |
-
-> **Por que `async/await`?** A API moderna do `expo-sqlite` (`openDatabaseAsync`, `execAsync`, `runAsync`, `getAllAsync`) é assíncrona — o banco roda em thread separada e não trava a UI. Por isso todas as funções do contexto também são `async`.
-
-> **E o `useEffect`?** Ele não pode ser `async` diretamente. Usamos uma **IIFE (Immediately Invoked Function Expression)**: declaramos `(async () => { ... })()` para criar uma função `async` interna e já chamá-la. É o padrão idiomático do React para usar `await` dentro de `useEffect`.
 
 ---
 
-## Passo 4 — Testar a migração
+## Passo 9 — Exibir o comprovante na tela de Detalhe (com scroll)
 
-Salve todos os arquivos e aguarde o Expo recarregar.
+### 9.1 — Substituir `screens/DetalheTransacaoScreen.js`
 
-### 4.1 — Roteiro de teste
-
-1. **Abra o app** → se tinha dados do AsyncStorage, a lista começa vazia (banco SQLite novo)
-2. **Adicione uma transação** → deve aparecer na lista
-3. **Feche e reabra o app** → transação deve continuar lá
-4. **Faça toque longo** → confirme a exclusão — deve sumir da lista
-
-### 4.2 — Verificar o banco via log (opcional)
-
-O bloco já está em `database/db.js` comentado. Descomente temporariamente para inspecionar os dados:
-
-```jsx
-export async function logTransacoes() {
-  const dados = await db.getAllAsync('SELECT * FROM transacoes');
-  console.log('Transações no banco:', JSON.stringify(dados, null, 2));
-}
-```
-
-E chame com `await logTransacoes()` no console ou em algum efeito.
-
----
-
-## Passo 5 — Consultas avançadas com SQL (bônus)
-
-Uma das vantagens do SQLite é poder filtrar diretamente no banco, sem carregar tudo para o JavaScript.
-
-### 5.1 — Descomente em `database/db.js`
-
-```jsx
-// Busca apenas despesas de uma categoria
-export async function buscarPorCategoria(categoria) {
-  return await db.getAllAsync(
-    'SELECT * FROM transacoes WHERE categoria = ? ORDER BY rowid DESC',
-    [categoria]
-  );
-}
-
-// Soma total por tipo
-export async function totalPorTipo(tipo) {
-  const resultado = await db.getFirstAsync(
-    'SELECT SUM(valor) as total FROM transacoes WHERE tipo = ?',
-    [tipo]
-  );
-  return resultado?.total ?? 0;
-}
-
-// Busca transações de um período
-export async function buscarPorPeriodo(dataInicio, dataFim) {
-  return await db.getAllAsync(
-    'SELECT * FROM transacoes WHERE data BETWEEN ? AND ? ORDER BY data DESC',
-    [dataInicio, dataFim]
-  );
-}
-```
-
-> Essas funções não são usadas na tela agora, mas demonstram o poder do SQL para consultas específicas — algo que o AsyncStorage não oferece.
-
----
-
-## Passo 6 — Persistir o primeiro acesso com AsyncStorage
-
-Hoje a tela de boas-vindas reaparece toda vez que o app é aberto, porque o estado `primeiroAcesso` vive apenas em memória. Vamos criar um **contexto dedicado** que persiste essa flag no `AsyncStorage` — sem mexer no `TransacoesContext` (que cuida só das transações no SQLite).
-
-### Por que dois contextos e dois armazenamentos?
-
-| Responsabilidade | Contexto | Armazenamento |
-|---|---|---|
-| Lista de transações | `TransacoesContext` | SQLite |
-| Flag de primeiro acesso | `PrimeiroAcessoContext` (novo) | AsyncStorage |
-
-> **Por que AsyncStorage e não SQLite?** A flag é um único booleano que o app lê uma vez ao abrir. Criar uma tabela SQL para isso seria exagero. AsyncStorage (chave-valor) é a ferramenta certa para preferências e flags simples. Esse é um padrão comum: **SQLite para dados relacionais, AsyncStorage para preferências do usuário**.
-
-### 6.1 — Crie `context/PrimeiroAcessoContext.js`
-
-```jsx
-// context/PrimeiroAcessoContext.js
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const CHAVE = '@minhasfinancas:primeiro_acesso_concluido';
-
-const PrimeiroAcessoContext = createContext(null);
-
-export function PrimeiroAcessoProvider({ children }) {
-  const [primeiroAcesso, setPrimeiroAcesso] = useState(true);
-  const [carregando, setCarregando] = useState(true);
-
-  useEffect(() => {
-    AsyncStorage.getItem(CHAVE).then(valor => {
-      if (valor === 'true') setPrimeiroAcesso(false);
-      setCarregando(false);
-    });
-  }, []);
-
-  async function concluir() {
-    await AsyncStorage.setItem(CHAVE, 'true');
-    setPrimeiroAcesso(false);
-  }
-
-  return (
-    <PrimeiroAcessoContext.Provider value={{ primeiroAcesso, carregando, concluir }}>
-      {children}
-    </PrimeiroAcessoContext.Provider>
-  );
-}
-
-export function usePrimeiroAcesso() {
-  const contexto = useContext(PrimeiroAcessoContext);
-  if (!contexto) {
-    throw new Error('usePrimeiroAcesso precisa estar dentro de <PrimeiroAcessoProvider>');
-  }
-  return contexto;
-}
-```
-
-**Como funciona:**
-
-| Estado / função | Papel |
-|---|---|
-| `primeiroAcesso` | Booleano — controla qual árvore o `App.js` renderiza |
-| `carregando` | Verdadeiro até a leitura inicial do AsyncStorage terminar |
-| `useEffect` | Roda uma vez ao montar; lê a chave e desliga o `carregando` |
-| `concluir()` | Grava `'true'` na chave e atualiza o estado — chamado pelo botão "Começar" |
-| `usePrimeiroAcesso()` | Hook que consome o contexto, com guarda de erro se usado fora do Provider |
-
-### 6.2 — Substitua o conteúdo completo de `App.js`
-
-```jsx
-// App.js
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { TabRoutes } from './routes/TabRoutes';
-import { TransacoesProvider } from './context/TransacoesContext';
-import { BoasVindasScreen } from './screens/BoasVindasScreen';
-import {
-  PrimeiroAcessoProvider,
-  usePrimeiroAcesso,
-} from './context/PrimeiroAcessoContext';
-
-function ConteudoApp() {
-  const { primeiroAcesso, carregando, concluir } = usePrimeiroAcesso();
-
-  // Enquanto lê o AsyncStorage, evita o flash da tela de boas-vindas
-  if (carregando) return null;
-
-  if (primeiroAcesso) {
-    return <BoasVindasScreen onConcluir={concluir} />;
-  }
-
-  return (
-    <TransacoesProvider>
-      <NavigationContainer>
-        <TabRoutes />
-      </NavigationContainer>
-    </TransacoesProvider>
-  );
-}
-
-export default function App() {
-  return (
-    <SafeAreaProvider>
-      <PrimeiroAcessoProvider>
-        <ConteudoApp />
-      </PrimeiroAcessoProvider>
-    </SafeAreaProvider>
-  );
-}
-```
-
-**O que mudou em relação à Aula 4:**
-
-| Antes (Aula 4) | Agora (Aula 5) |
-|---|---|
-| `useState(true)` direto no `App.js` | Estado dentro do `PrimeiroAcessoProvider` |
-| Flag perdia o valor ao fechar o app | Persistida no AsyncStorage |
-| Welcome reaparecia toda vez | Aparece só uma vez por instalação |
-| `App.js` tinha toda a lógica | `App.js` só compõe os Providers; `ConteudoApp` decide a árvore |
-
-> **Por que `if (carregando) return null;`?** A primeira leitura do AsyncStorage é assíncrona. Sem o guard, o app começaria com `primeiroAcesso = true` (default), montaria a tela de boas-vindas, e logo depois descobriria que a flag já estava persistida — gerando um "flash" da tela errada. Retornar `null` durante o carregamento mostra a tela em branco rapidamente até a leitura terminar.
-
-> **Por que o `TransacoesProvider` continua só dentro do app principal?** A `BoasVindasScreen` não consome transações. Mantendo o `TransacoesProvider` dentro do `if (primeiroAcesso) { ... }`, o SQLite só é inicializado quando o usuário entra no app de fato.
-
-### 6.3 — Roteiro de teste
-
-1. **Apague o app** do celular/emulador (ou rode com cache limpo via `npx expo start -c`)
-2. Abra → tela de boas-vindas aparece
-3. Toque em **Começar** → vai para o Dashboard
-4. **Feche e reabra** o app → vai direto ao Dashboard, sem boas-vindas ✅
-5. Para repetir o teste, desinstale o app ou limpe os dados do Expo Go
-
----
-
-## Passo 7 — Botão excluir na tela de detalhe
-
-Hoje só é possível excluir uma transação com **toque longo** na lista do Dashboard. Vamos adicionar um botão **"Excluir"** visível na tela de detalhe, onde o usuário já está olhando o item e tem todo o contexto para decidir.
-
-### Por que na tela de detalhe?
-
-| | Toque longo na lista | Botão na tela de detalhe |
-|---|---|---|
-| Descoberta | Gesto oculto | Visual e óbvio |
-| Contexto | Apenas o resumo da linha | Item aberto, todos os dados à vista |
-| Risco | Pode disparar sem querer | Ação intencional após inspeção |
-
-> Os dois caminhos vão **coexistir**: o toque longo continua como atalho rápido para quem já o conhece, e o botão entra como ponto de acesso óbvio para todos os usuários.
-
-### O que vamos reaproveitar
-
-- O `TransacoesContext` já expõe `removerTransacao` (criado no Passo 3) — ele apaga no SQLite e atualiza a lista em memória
-- O Dashboard consome a lista do contexto, então re-renderiza sozinho quando a transação some
-
-Ou seja: nenhum arquivo do banco ou do contexto precisa mudar. A alteração é **só na tela de detalhe**.
-
-### 7.1 — Substitua o conteúdo completo de `screens/DetalheTransacaoScreen.js`
-
-> ⚠️ **Atenção:** copie e cole o arquivo inteiro abaixo.
+Substitua o conteúdo **completo** do arquivo pelo código abaixo.  
+As linhas marcadas com `// ← NOVO` são as únicas alterações em relação à aula anterior:
 
 ```jsx
 // screens/DetalheTransacaoScreen.js
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import {
+  View, Text, StyleSheet, TouchableOpacity,
+  Alert, Platform, Image, ScrollView                     // ← NOVO: Image e ScrollView
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTransacoes } from '../context/TransacoesContext';
 import { cores, espacamento, raio } from '../theme';
 
 export function DetalheTransacaoScreen({ route, navigation }) {
-  const { transacao } = route.params;  // recebe os dados via navigate()
+  const { transacao } = route.params;
   const isReceita = transacao.tipo === 'receita';
   const { removerTransacao } = useTransacoes();
 
@@ -586,8 +921,6 @@ export function DetalheTransacaoScreen({ route, navigation }) {
       navigation.goBack();
     };
 
-    // No react-native-web, Alert.alert ignora os botões e nunca chama onPress.
-    // Usamos window.confirm para que a confirmação funcione no Expo Web.
     if (Platform.OS === 'web') {
       if (window.confirm(mensagem)) excluir();
       return;
@@ -605,15 +938,14 @@ export function DetalheTransacaoScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      {/* ← NOVO: ScrollView para permitir rolar quando há foto de comprovante */}
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
 
-        {/* Botão voltar */}
         <TouchableOpacity style={styles.botaoVoltar} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={cores.texto} />
           <Text style={styles.textoVoltar}>Voltar</Text>
         </TouchableOpacity>
 
-        {/* Ícone do tipo */}
         <View style={[styles.icone, { backgroundColor: isReceita ? cores.receitaFundo : cores.despesaFundo }]}>
           <Ionicons
             name={isReceita ? 'arrow-up-circle' : 'arrow-down-circle'}
@@ -640,7 +972,25 @@ export function DetalheTransacaoScreen({ route, navigation }) {
             <Text style={styles.rotulo}>Data</Text>
             <Text style={styles.dado}>{transacao.data}</Text>
           </View>
+
+          {/* ← NOVO: mostra coordenadas se existirem */}
+          {transacao.latitude != null && transacao.longitude != null && (
+            <View style={styles.linha}>
+              <Text style={styles.rotulo}>Local</Text>
+              <Text style={styles.dado}>
+                {transacao.latitude.toFixed(4)}, {transacao.longitude.toFixed(4)}
+              </Text>
+            </View>
+          )}
         </View>
+
+        {/* ← NOVO: mostra a foto do comprovante se existir */}
+        {transacao.comprovante && (
+          <View style={styles.comprovanteWrapper}>
+            <Text style={styles.comprovanteTitulo}>Comprovante</Text>
+            <Image source={{ uri: transacao.comprovante }} style={styles.comprovante} resizeMode="contain" />
+          </View>
+        )}
 
         <TouchableOpacity
           style={styles.botaoExcluir}
@@ -651,14 +1001,19 @@ export function DetalheTransacaoScreen({ route, navigation }) {
           <Ionicons name="trash-outline" size={20} color={cores.despesa} />
           <Text style={styles.textoExcluir}>Excluir</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: cores.fundo },
-  container: { flex: 1, padding: espacamento.md, alignItems: 'center' },
+  container: {
+    flexGrow: 1,                       // ← NOVO: dentro de ScrollView, flex vira flexGrow
+    padding: espacamento.md,
+    paddingBottom: espacamento.xl,     // ← NOVO: respiro pro botão Excluir não colar na borda
+    alignItems: 'center',
+  },
   botaoVoltar: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     alignSelf: 'flex-start', marginBottom: espacamento.lg,
@@ -678,166 +1033,246 @@ const styles = StyleSheet.create({
   linha: { flexDirection: 'row', justifyContent: 'space-between' },
   rotulo: { fontSize: 14, color: cores.subtexto },
   dado: { fontSize: 14, fontWeight: '600', color: cores.texto },
-  botaoExcluir: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+
+  // ← NOVO: comprovante
+  comprovanteWrapper: {
     width: '100%',
     marginTop: espacamento.lg,
-    paddingVertical: espacamento.md,
+    alignItems: 'center',
+  },
+  comprovanteTitulo: {
+    fontSize: 14, fontWeight: '600', color: cores.subtexto,
+    marginBottom: espacamento.sm, alignSelf: 'flex-start',
+  },
+  comprovante: {
+    width: '100%', height: 280,
     borderRadius: raio.md,
-    borderWidth: 1,
-    borderColor: cores.despesa,
+    backgroundColor: '#eee',
+  },
+
+  botaoExcluir: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, width: '100%',
+    marginTop: espacamento.lg,
+    paddingVertical: espacamento.md,
+    borderRadius: raio.md, borderWidth: 1, borderColor: cores.despesa,
     backgroundColor: 'transparent',
   },
   textoExcluir: { fontSize: 16, fontWeight: '600', color: cores.despesa },
 });
 ```
 
-**O que mudou em relação à versão anterior:**
-
-| Adição | Por quê |
-|---|---|
-| `Alert` no import de `react-native` | Para exibir o diálogo nativo de confirmação |
-| `useTransacoes` do contexto | Para acessar `removerTransacao` (que apaga no SQLite e atualiza a lista) |
-| Função `confirmarExclusao()` | Encapsula o fluxo: pergunta → remove → volta |
-| `style: 'destructive'` no botão "Excluir" do Alert | Padrão iOS/Android: o iOS pinta de vermelho automaticamente, sinalizando perigo |
-| `removerTransacao(transacao.id)` seguido de `navigation.goBack()` | Apaga e retorna ao Dashboard, que re-renderiza sozinho via contexto |
-| Estilos `botaoExcluir` e `textoExcluir` | Outline vermelho — ação destrutiva sem dominar a tela |
-| `accessibilityRole` e `accessibilityLabel` | Leitores de tela anunciam "Excluir transação, botão" |
-
-> **Por que outline em vez de fundo vermelho sólido?** O foco visual da tela é o **valor** da transação. Um botão sólido em vermelho competiria com ele e deixaria a tela visualmente "alarmada". O outline preserva a hierarquia: o valor continua sendo o protagonista, e o botão sinaliza claramente que é uma ação perigosa sem ofuscar o resto.
-
-> **Por que `Alert.alert` e não um Modal customizado?** O `Alert.alert` é nativo, gratuito (sem código adicional), e respeita as convenções da plataforma — no iOS aparece como um popup central, no Android como um diálogo Material. Para uma confirmação simples de "sim/não", essa é a escolha certa. Modal customizado só faz sentido quando você precisa de campos de entrada ou layout específico do app.
-
-### 7.2 — Roteiro de teste
-
-1. Adicione algumas transações de teste no app
-2. Toque em uma para abrir a tela de detalhe → o botão **Excluir** aparece abaixo da tabela
-3. Toque em **Excluir** → o Alert nativo aparece com o nome da transação na pergunta
-4. Toque em **Cancelar** → o Alert fecha, a transação continua lá ✅
-5. Repita e toque em **Excluir** no Alert → volta ao Dashboard, transação sumiu da lista ✅
-6. Feche e reabra o app → a transação excluída continua sumida (persistência confirmada) ✅
-7. Confirme que o **toque longo** na lista do Dashboard ainda funciona como atalho
+> **Por que `flexGrow: 1` em vez de `flex: 1`?** No estilo passado como `contentContainerStyle` do `ScrollView`, usar `flex: 1` trava o conteúdo na altura do viewport e desabilita o scroll. `flexGrow: 1` permite o conteúdo ocupar a altura mínima da tela (para alinhar centralizado) **e** crescer além dela (para rolar quando há uma foto grande).
 
 ---
 
-## Referência Rápida — Para Aprofundar
+## Passo 10 — Criar a tela de Mapa
 
-> Esta seção é **só para consulta**. Não é necessária para concluir o app — serve como guia de estudo para reforçar os conceitos de banco usados na aula. Use-a no seu ritmo.
+### 10.1 — Crie `screens/MapaScreen.js`
 
-### R1 — UPDATE: modificar registros existentes
-
-A aula usa `INSERT`, `SELECT` e `DELETE`. O quarto comando essencial é o `UPDATE`, que altera colunas de uma linha que **já existe** no banco.
-
-```sql
-UPDATE transacoes
-SET valor = ?, descricao = ?
-WHERE id = ?;
-```
-
-Exemplo de função em JavaScript (referência — não precisa adicionar ao projeto agora):
+Este é um arquivo **novo** — crie-o do zero. Note que ele importa de `MapaCompat`, não diretamente de `react-native-maps`:
 
 ```jsx
-// Atualiza uma transação existente pelo id
-export async function atualizarTransacao(t) {
-  await db.runAsync(
-    'UPDATE transacoes SET descricao = ?, valor = ?, tipo = ?, categoria = ?, data = ? WHERE id = ?',
-    [t.descricao, t.valor, t.tipo, t.categoria, t.data, t.id]
+// screens/MapaScreen.js
+// Funciona no Android/iOS (react-native-maps) e no web (Leaflet) via MapaCompat.
+import React, { useRef } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { MapView, Marker, Callout } from '../components/MapaCompat';
+import { useTransacoes } from '../context/TransacoesContext';
+import { cores, espacamento, raio } from '../theme';
+
+// Região exibida quando não há nenhum ponto marcado (Brasil inteiro)
+const REGIAO_BRASIL = {
+  latitude: -15.7801, longitude: -47.9292,
+  latitudeDelta: 30, longitudeDelta: 30,
+};
+
+export function MapaScreen() {
+  const { transacoes } = useTransacoes();
+  const mapaRef = useRef(null);
+
+  // Filtra apenas transações que têm coordenadas salvas
+  const comLocalizacao = transacoes.filter(t => t.latitude && t.longitude);
+
+  // Quando o mapa termina de carregar, ajusta o zoom para abranger todos os pins
+  function aoMapaCarregar() {
+    if (comLocalizacao.length === 0 || !mapaRef.current) return;
+    mapaRef.current.fitToCoordinates(
+      comLocalizacao.map(t => ({ latitude: t.latitude, longitude: t.longitude })),
+      {
+        edgePadding: { top: 80, right: 80, bottom: 80, left: 80 },
+        animated: true,
+      }
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      {comLocalizacao.length === 0 ? (
+        <View style={styles.vazio}>
+          <Ionicons name="map-outline" size={64} color="#bdc3c7" />
+          <Text style={styles.textoVazio}>Nenhuma transação com localização</Text>
+          <Text style={styles.subtextoVazio}>
+            Toque em "Minha localização" ao registrar uma transação
+          </Text>
+        </View>
+      ) : (
+        <MapView
+          ref={mapaRef}
+          style={styles.mapa}
+          initialRegion={REGIAO_BRASIL}
+          onMapReady={aoMapaCarregar}
+        >
+          {comLocalizacao.map(t => (
+            <Marker
+              key={t.id}
+              coordinate={{ latitude: t.latitude, longitude: t.longitude }}
+              pinColor={t.tipo === 'receita' ? cores.receita : cores.despesa}
+            >
+              <Callout tooltip>
+                <View style={styles.callout}>
+                  <Text style={styles.calloutTitulo}>{t.descricao}</Text>
+                  <Text style={[
+                    styles.calloutValor,
+                    { color: t.tipo === 'receita' ? cores.receita : cores.despesa },
+                  ]}>
+                    {t.tipo === 'receita' ? '+' : '-'} R$ {t.valor.toFixed(2)}
+                  </Text>
+                  <Text style={styles.calloutData}>{t.data}</Text>
+                </View>
+              </Callout>
+            </Marker>
+          ))}
+        </MapView>
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1 },
+  mapa:     { flex: 1 },
+  vazio: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    padding: espacamento.md,
+  },
+  textoVazio:    { fontSize: 17, fontWeight: '600', color: cores.subtexto },
+  subtextoVazio: { fontSize: 13, color: '#bdc3c7', textAlign: 'center' },
+  callout: {
+    backgroundColor: '#fff',
+    borderRadius: raio.md,
+    padding: espacamento.sm,
+    minWidth: 160,
+  },
+  calloutTitulo: { fontSize: 14, fontWeight: '700', color: cores.texto },
+  calloutValor:  { fontSize: 16, fontWeight: '800', marginTop: 2 },
+  calloutData:   { fontSize: 12, color: cores.subtexto, marginTop: 2 },
+});
+```
+
+---
+
+## Passo 11 — Adicionar o Mapa ao TabNavigator
+
+### 11.1 — Substituir `routes/TabRoutes.js`
+
+Substitua o conteúdo **completo** do arquivo pelo código abaixo.  
+As linhas marcadas com `// ← NOVO` são as únicas alterações em relação à aula anterior:
+
+```jsx
+// routes/TabRoutes.js
+import React from 'react';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
+import { DashboardStack }       from './DashboardStack';
+import { NovaTransacaoScreen }  from '../screens/NovaTransacaoScreen';
+import { RelatorioScreen }      from '../screens/RelatorioScreen';
+import { MapaScreen }           from '../screens/MapaScreen'; // ← NOVO
+import { SobreScreen }          from '../screens/SobreScreen';
+
+const Tab = createBottomTabNavigator();
+
+const ICONES_TAB = {
+  Dashboard:         { ativa: 'home',                 inativa: 'home-outline'                 },
+  'Nova Transação':  { ativa: 'add-circle',           inativa: 'add-circle-outline'           },
+  Relatório:         { ativa: 'bar-chart',            inativa: 'bar-chart-outline'            },
+  Mapa:              { ativa: 'map',                  inativa: 'map-outline'                  }, // ← NOVO
+  Sobre:             { ativa: 'information-circle',   inativa: 'information-circle-outline'   },
+};
+
+export function TabRoutes() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor:   '#2c3e50',
+        tabBarInactiveTintColor: '#95a5a6',
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor:  '#eee',
+          height:          60,
+          paddingBottom:   8,
+          paddingTop:      4,
+        },
+        tabBarIcon: ({ focused, color, size }) => {
+          const { ativa, inativa } = ICONES_TAB[route.name];
+          return <Ionicons name={focused ? ativa : inativa} size={size} color={color} />;
+        },
+      })}
+    >
+      <Tab.Screen name="Dashboard"       component={DashboardStack}      />
+      <Tab.Screen name="Nova Transação"  component={NovaTransacaoScreen} />
+      <Tab.Screen name="Relatório"       component={RelatorioScreen}     />
+      <Tab.Screen name="Mapa"            component={MapaScreen}          />
+      <Tab.Screen name="Sobre"           component={SobreScreen}         />
+    </Tab.Navigator>
   );
 }
 ```
 
-> ⚠️ **Cuidado com `UPDATE` sem `WHERE`.** O comando `UPDATE transacoes SET valor = 0` (sem `WHERE`) zera **todas as linhas** da tabela. O `WHERE` é o que torna a operação cirúrgica. A mesma regra vale para `DELETE`.
-
 ---
 
-### R2 — Por que usar `?` em vez de juntar strings (SQL injection)
+## Passo 12 — Testar
 
-Repare que todas as funções do banco usam `?` como marcador para os valores, e os valores entram em um array separado:
+### Android / iOS (Expo Go)
 
-```jsx
-// ✅ Forma correta — usa ? e passa os valores em um array
-db.runSync(
-  'INSERT INTO transacoes (id, descricao) VALUES (?, ?)',
-  [t.id, t.descricao]
-);
+```bash
+npx expo start
 ```
 
-O que aconteceria se você juntasse a string assim?
+Pressione `a` para Android ou `i` para iOS. Se o celular não conseguir baixar o bundle (`IOException: Failed to download remote update`), use modo tunnel:
 
-```jsx
-// ❌ NUNCA faça isso — vulnerável a SQL injection
-db.runSync(
-  `INSERT INTO transacoes (id, descricao) VALUES ('${t.id}', '${t.descricao}')`
-);
+```bash
+npx expo start --tunnel
 ```
 
-Se o usuário digitasse na descrição algo como `'); DROP TABLE transacoes; --`, a string final viraria um comando que **apaga a tabela inteira**. Com `?`, o SQLite trata o texto sempre como **dado**, nunca como comando.
+### Web
 
-Mesmo num app local, sempre use `?`:
-
-- Evita problemas com aspas e apóstrofes (ex.: descrição "Pão d'água" quebraria a string)
-- O banco escapa os valores corretamente para você
-- É o padrão profissional — você cria o hábito certo desde o primeiro dia
-
----
-
-### R3 — Constraints: regras que o banco garante
-
-No `CREATE TABLE` do Passo 2 já vimos `PRIMARY KEY` e `NOT NULL`. Existem outras restrições úteis:
-
-| Constraint | O que faz | Exemplo |
-|---|---|---|
-| `PRIMARY KEY` | Identifica unicamente cada linha; não pode ser nula nem repetir | `id TEXT PRIMARY KEY` |
-| `NOT NULL` | A coluna não aceita o valor `NULL` (vazio) | `valor REAL NOT NULL` |
-| `DEFAULT` | Valor automático quando o INSERT não informa a coluna | `categoria TEXT DEFAULT 'Outros'` |
-| `UNIQUE` | Não permite duas linhas com o mesmo valor nessa coluna | `email TEXT UNIQUE` |
-| `CHECK` | Só aceita valores que satisfaçam a condição entre parênteses | `valor REAL CHECK (valor > 0)` |
-
-Versão mais protegida da tabela `transacoes` (apenas para estudo):
-
-```sql
-CREATE TABLE IF NOT EXISTS transacoes (
-  id        TEXT PRIMARY KEY,
-  descricao TEXT NOT NULL,
-  valor     REAL NOT NULL CHECK (valor > 0),
-  tipo      TEXT NOT NULL CHECK (tipo IN ('receita', 'despesa')),
-  categoria TEXT NOT NULL DEFAULT 'Outros',
-  data      TEXT NOT NULL
-);
+```bash
+npx expo start --web
 ```
 
-> **Por que isso importa?** Se algum INSERT violar uma constraint, o banco rejeita a operação e lança um erro. Constraints transformam regras de negócio em garantias do banco — mesmo que o programador esqueça de validar no JavaScript, o banco não deixa o dado inconsistente entrar.
+Abre direto no navegador. O mapa carrega tiles do OpenStreetMap — sem chave de API.
 
----
+### Roteiro de teste
 
-### R4 — DB Browser for SQLite: ferramenta de manutenção do banco
-
-O **DB Browser for SQLite** é um programa gratuito que abre arquivos `.db` e mostra as tabelas como uma planilha. É a ferramenta padrão para **manutenção e inspeção** de bancos SQLite — tanto em desenvolvimento quanto em produção:
-
-- Conferir o `CREATE TABLE` e os tipos de cada coluna
-- Visualizar todas as linhas de uma tabela como planilha
-- Executar `SELECT`, `UPDATE`, `INSERT` e `DELETE` manualmente, sem precisar mexer no código do app
-- Importar/exportar dados em CSV ou SQL
-- Corrigir registros, ajustar valores, popular o banco com dados de teste
-
-#### Instalação
-
-| Sistema | Como instalar |
-|---|---|
-| Windows | Baixe o `.exe` em [sqlitebrowser.org](https://sqlitebrowser.org) |
-| macOS | `brew install --cask db-browser-for-sqlite` ou baixe pelo site |
-| Linux (Ubuntu/Debian) | `sudo apt install sqlitebrowser` |
-
-#### Principais abas
-
-- **Database Structure** — mostra o `CREATE TABLE` que gerou cada tabela
-- **Browse Data** — todas as linhas da tabela como planilha; permite editar diretamente
-- **Execute SQL** — roda qualquer comando SQL manualmente para testar consultas
-
-> 💡 Você pode criar um banco `.db` local no seu computador, brincar com `CREATE TABLE`, `INSERT` e `SELECT` no DB Browser e depois reaproveitar as queries no código do app — uma forma rápida de praticar SQL sem rodar o app a cada teste.
+1. Vá em **Nova Transação**:
+   - Preencha descrição, valor, tipo e categoria
+   - Toque em **"Minha localização"** → autorize o acesso ao GPS
+   - Toque em **"Tirar foto"** → autorize a câmera → fotografe um recibo (no web, use **"Da galeria"**)
+   - Alternativamente, toque em **"Escolher no mapa"** e marque um ponto tocando no mapa
+   - Salve a transação
+2. Volte ao **Dashboard** e toque na transação recém-criada:
+   - A tela de detalhe deve exibir as coordenadas e a foto
+   - **Role para baixo** — o ScrollView permite ver a foto inteira e o botão Excluir
+3. Vá na aba **"Mapa"**:
+   - O pin da transação deve aparecer (verde se receita, vermelho se despesa)
+   - Toque no pin → o callout mostra descrição, valor e data
 
 ---
 
@@ -845,50 +1280,69 @@ O **DB Browser for SQLite** é um programa gratuito que abre arquivos `.db` e mo
 
 | Funcionalidade | Status |
 |----------------|--------|
-| Banco criado automaticamente | ✅ `CREATE TABLE IF NOT EXISTS` |
-| Transações salvas em tabela SQL | ✅ `INSERT INTO` |
-| Carregamento ao abrir o app | ✅ `SELECT * FROM` |
-| Exclusão por id | ✅ `DELETE FROM WHERE` |
-| API assíncrona com `async/await` | ✅ `expo-sqlite` async API (`openDatabaseAsync`, `runAsync`, `getAllAsync`) |
-| Consultas avançadas (bônus) | ✅ `WHERE`, `SUM`, `BETWEEN` |
-| Boas-vindas só no primeiro acesso | ✅ `AsyncStorage` + `PrimeiroAcessoContext` |
-| Botão excluir na tela de detalhe | ✅ `Alert.alert` + `removerTransacao` + `goBack` |
+| Solicitar permissão de GPS | ✅ `requestForegroundPermissionsAsync` |
+| Capturar coordenadas | ✅ `getCurrentPositionAsync` |
+| Escolher ponto no mapa | ✅ `SeletorLocalMapa` + `MapaCompat` |
+| Solicitar permissão de câmera | ✅ `requestCameraPermissionsAsync` |
+| Tirar foto do comprovante | ✅ `launchCameraAsync` |
+| Selecionar foto da galeria | ✅ `launchImageLibraryAsync` |
+| Salvar localização e foto no SQLite | ✅ colunas `latitude`, `longitude`, `comprovante` |
+| Migração automática do banco | ✅ `PRAGMA table_info` + `ALTER TABLE` |
+| Exibir mapa interativo | ✅ `MapaCompat` (Google/Apple no native, Leaflet no web) |
+| Pins coloridos por tipo | ✅ `pinColor` no `Marker` |
+| Info ao tocar no pin | ✅ `Callout` |
+| Comprovante na tela de detalhe | ✅ `Image` dentro de `ScrollView` |
+| Mesma base de código nas 3 plataformas | ✅ extensões `.native.js` / `.web.js` em `MapaCompat` |
 
 ---
 
 ## Resolução de Problemas
 
-### "Cannot find module 'expo-sqlite'"
+### "Cannot find module 'expo-location'" / 'expo-image-picker' / 'react-leaflet'
 ```bash
-npx expo install expo-sqlite
+npx expo install expo-location react-native-maps expo-image-picker
+npm install leaflet react-leaflet
 ```
-Reinicie o servidor com `r` no terminal do Expo.
 
-### O banco começa vazio mesmo tendo dados da Aula 4
-Esperado — AsyncStorage e SQLite são armazenamentos independentes. Os dados do AsyncStorage não migram automaticamente para o SQLite. Em produção, você implementaria uma migração na primeira abertura após a atualização.
+### O diálogo de permissão não aparece
+- **Android:** Configurações → Apps → minhas-financas → Permissões → habilite Localização e Câmera.
+- **Expo Go:** as permissões são gerenciadas pelo próprio app Expo Go. Se já negou antes, revogue manualmente nas configurações do Expo Go.
 
-### "no such table: transacoes"
-Confirme que `inicializarBanco()` é chamado antes de qualquer outra função do banco no `useEffect` do `TransacoesProvider`.
+### O mapa do Android fica cinza
+No Expo Go e builds de desenvolvimento, funciona sem chave. Para builds de produção, adicione no `app.json`:
+```json
+"android": {
+  "config": {
+    "googleMaps": { "apiKey": "SUA_CHAVE_AQUI" }
+  }
+}
+```
 
-### Dados somem após fechar o app
-Verifique se `inserirTransacao(novaTransacao)` está sendo chamado em `adicionarTransacao()` — a função do banco precisa ser chamada antes ou junto com o `setTransacoes`.
+### `IOException: Failed to download remote update` no Expo Go
+O celular não consegue alcançar o servidor Metro pela rede local. Soluções:
+- **Modo tunnel:** `npx expo start --tunnel` (passa por ngrok, ignora a rede local)
+- **USB:** `adb reverse tcp:8081 tcp:8081` + `npx expo start`, depois conecte manualmente via `exp://localhost:8081`
 
-### "Cannot read properties of undefined (reading 'getAllAsync')"
-Significa que alguma função do banco rodou **antes** de `inicializarBanco()` terminar. A `db` só é atribuída ao final daquele `await`. Confirme que o `useEffect` do `TransacoesProvider` espera `inicializarBanco()` antes de chamar `carregarTransacoes()`:
+### `Importing native-only module ... codegenNativeCommands` ao abrir o web
+Algum arquivo do projeto está importando `react-native-maps` diretamente. **Use sempre `from '../components/MapaCompat'`** — nunca importe `react-native-maps` em telas. O `MapaCompat.web.js` substitui automaticamente no bundle web.
 
+### Localização retorna `null` no emulador
+No Android Studio → **Extended Controls (⋯) → Location** → defina latitude e longitude e clique em **"Send"**.
+
+### A câmera não abre no emulador
+- **Emulador Android:** tem câmera virtual. **Extended Controls (⋯) → Camera**.
+- **iOS Simulator:** **não tem câmera**. Use **"Da galeria"** para testar.
+
+### "column latitude does not exist" / "column comprovante does not exist"
+A tabela foi criada antes de adicionar as colunas. Desinstale e reinstale o app para recriar o banco do zero, ou execute manualmente uma vez:
 ```jsx
-useEffect(() => {
-  (async () => {
-    await inicializarBanco();
-    await carregarTransacoes();
-  })();
-}, []);
+await db.execAsync('ALTER TABLE transacoes ADD COLUMN latitude REAL');
+await db.execAsync('ALTER TABLE transacoes ADD COLUMN longitude REAL');
+await db.execAsync('ALTER TABLE transacoes ADD COLUMN comprovante TEXT');
 ```
 
-> 💡 **Dica — problemas de rede ao abrir no celular?** Se ao escanear o QR code o Expo exibir a tela **"Something went wrong"** (computador e celular em redes diferentes, ou rede Wi-Fi bloqueando conexões locais), reinicie com o parâmetro `--tunnel`:
->
-> ```bash
-> npx expo start --tunnel
-> ```
->
-> O modo tunnel cria uma conexão via internet (ngrok), dispensando que o celular esteja na mesma rede do computador. É mais lento, porém funciona em qualquer cenário de rede.
+### A foto some depois de fechar o app
+A URI devolvida pelo `expo-image-picker` aponta para a **pasta de cache** do app, que o sistema operacional pode limpar. Para persistir de verdade, copie-a para `FileSystem.documentDirectory` ou faça upload para um servidor.
+
+### Os pins do Leaflet aparecem sem ícone no web
+O `MapaCompat.web.js` aponta `iconUrl`/`iconRetinaUrl`/`shadowUrl` para a CDN do `unpkg.com`. Se sua rede bloqueia CDNs, baixe os PNGs do Leaflet e copie para `assets/leaflet/`, depois substitua as URLs.
