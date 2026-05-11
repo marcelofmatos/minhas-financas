@@ -2,11 +2,14 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  ScrollView, StyleSheet, Alert
+  ScrollView, StyleSheet, Alert, Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { cores, espacamento, raio } from '../theme';
-import { useTransacoes } from '../context/TransacoesContext';  // ← NOVO
+import { useTransacoes } from '../context/TransacoesContext';
+import { useLocalizacao } from '../hooks/useLocalizacao';
+import { useComprovante } from '../hooks/useComprovante';
+import { SeletorLocalMapa } from '../components/SeletorLocalMapa';
 
 const CATEGORIAS = [
   { id: 'alimentacao', label: 'Alimentação', icone: 'restaurant' },
@@ -23,10 +26,38 @@ export function NovaTransacaoScreen({ navigation }) {
   const [valor, setValor] = useState('');
   const [tipo, setTipo] = useState('despesa');
   const [categoria, setCategoria] = useState('outros');
+  const [localizacao, setLocalizacao] = useState(null);
+  const [modalVisivel, setModalVisivel] = useState(false);
+  const [comprovante, setComprovante] = useState(null);
 
-  const { adicionarTransacao } = useTransacoes();  // ← NOVO (dentro do componente)
+  const { adicionarTransacao } = useTransacoes();
+  const { obterLocalizacao, obtendo: obtendoLoc } = useLocalizacao();
+  const { tirarFoto, escolherDaGaleria, obtendo: obtendoFoto } = useComprovante();
 
-  // ↓ Função salvar atualizada para usar o contexto
+  async function capturarGPS() {
+    const coords = await obterLocalizacao();
+    if (coords) setLocalizacao(coords);
+  }
+
+  function confirmarPinDoMapa(coords) {
+    setLocalizacao(coords);
+    setModalVisivel(false);
+  }
+
+  async function capturarComCamera() {
+    const uri = await tirarFoto();
+    if (uri) setComprovante(uri);
+  }
+
+  async function selecionarDaGaleria() {
+    const uri = await escolherDaGaleria();
+    if (uri) setComprovante(uri);
+  }
+
+  function removerComprovante() {
+    setComprovante(null);
+  }
+
   const salvar = async () => {
     if (!descricao.trim()) {
       Alert.alert('Atenção', 'Digite uma descrição.');
@@ -45,12 +76,17 @@ export function NovaTransacaoScreen({ navigation }) {
       tipo,
       categoria,
       data: new Date().toLocaleDateString('pt-BR'),
+      latitude:    localizacao?.latitude  ?? null,
+      longitude:   localizacao?.longitude ?? null,
+      comprovante: comprovante ?? null,
     });
 
     setDescricao('');
     setValor('');
     setTipo('despesa');
     setCategoria('outros');
+    setLocalizacao(null);
+    setComprovante(null);
 
     navigation.navigate('Dashboard');
   };
@@ -107,10 +143,7 @@ export function NovaTransacaoScreen({ navigation }) {
         {CATEGORIAS.map(cat => (
           <TouchableOpacity
             key={cat.id}
-            style={[
-              styles.chipCategoria,
-              categoria === cat.id && styles.chipAtivo
-            ]}
+            style={[styles.chipCategoria, categoria === cat.id && styles.chipAtivo]}
             onPress={() => setCategoria(cat.id)}
           >
             <Ionicons
@@ -118,15 +151,87 @@ export function NovaTransacaoScreen({ navigation }) {
               size={16}
               color={categoria === cat.id ? '#fff' : cores.subtexto}
             />
-            <Text style={[
-              styles.textoChip,
-              categoria === cat.id && { color: '#fff' }
-            ]}>
+            <Text style={[styles.textoChip, categoria === cat.id && { color: '#fff' }]}>
               {cat.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      <Text style={styles.label}>Localização (opcional)</Text>
+      <View style={styles.botoesAcao}>
+        <TouchableOpacity
+          style={[styles.botaoAcao, localizacao && styles.botaoAcaoAtivo]}
+          onPress={capturarGPS}
+          disabled={obtendoLoc}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="locate" size={18} color={localizacao ? '#fff' : cores.primaria} />
+          <Text style={[styles.textoAcao, localizacao && { color: '#fff' }]}>
+            {obtendoLoc ? 'Obtendo...' : 'Minha localização'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.botaoAcao, localizacao && styles.botaoAcaoAtivo]}
+          onPress={() => setModalVisivel(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="map" size={18} color={localizacao ? '#fff' : cores.primaria} />
+          <Text style={[styles.textoAcao, localizacao && { color: '#fff' }]}>
+            Escolher no mapa
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {localizacao && (
+        <Text style={styles.infoAuxiliar}>
+          📍 {localizacao.latitude.toFixed(5)}, {localizacao.longitude.toFixed(5)}
+        </Text>
+      )}
+
+      <Text style={styles.label}>Comprovante (opcional)</Text>
+      <View style={styles.botoesAcao}>
+        <TouchableOpacity
+          style={[styles.botaoAcao, comprovante && styles.botaoAcaoAtivo]}
+          onPress={capturarComCamera}
+          disabled={obtendoFoto}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="camera" size={18} color={comprovante ? '#fff' : cores.primaria} />
+          <Text style={[styles.textoAcao, comprovante && { color: '#fff' }]}>
+            {obtendoFoto ? 'Abrindo...' : 'Tirar foto'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.botaoAcao, comprovante && styles.botaoAcaoAtivo]}
+          onPress={selecionarDaGaleria}
+          disabled={obtendoFoto}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="image" size={18} color={comprovante ? '#fff' : cores.primaria} />
+          <Text style={[styles.textoAcao, comprovante && { color: '#fff' }]}>
+            Da galeria
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {comprovante && (
+        <View style={styles.previewWrapper}>
+          <Image source={{ uri: comprovante }} style={styles.preview} />
+          <TouchableOpacity style={styles.botaoRemoverFoto} onPress={removerComprovante}>
+            <Ionicons name="close-circle" size={28} color={cores.despesa} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <SeletorLocalMapa
+        visivel={modalVisivel}
+        localizacaoAtual={localizacao}
+        onConfirmar={confirmarPinDoMapa}
+        onCancelar={() => setModalVisivel(false)}
+      />
 
       <TouchableOpacity style={styles.botaoSalvar} onPress={salvar} activeOpacity={0.8}>
         <Ionicons name="checkmark" size={22} color="#fff" />
@@ -164,10 +269,38 @@ const styles = StyleSheet.create({
   },
   chipAtivo: { backgroundColor: cores.primaria, borderColor: cores.primaria },
   textoChip: { fontSize: 13, color: cores.subtexto },
+
+  botoesAcao: { flexDirection: 'row', gap: 10, marginBottom: espacamento.xs },
+  botaoAcao: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, padding: 12, borderRadius: raio.md,
+    borderWidth: 1, borderColor: cores.primaria, backgroundColor: '#fff',
+  },
+  botaoAcaoAtivo: { backgroundColor: cores.primaria, borderColor: cores.primaria },
+  textoAcao: { fontSize: 13, fontWeight: '600', color: cores.primaria },
+  infoAuxiliar: { fontSize: 12, color: cores.subtexto, marginBottom: espacamento.md },
+
+  previewWrapper: {
+    alignSelf: 'flex-start',
+    marginVertical: espacamento.md,
+    position: 'relative',
+  },
+  preview: {
+    width: 120, height: 160,
+    borderRadius: raio.md,
+    borderWidth: 1, borderColor: '#ddd',
+    backgroundColor: '#eee',
+  },
+  botaoRemoverFoto: {
+    position: 'absolute', top: -10, right: -10,
+    backgroundColor: '#fff', borderRadius: 14,
+  },
+
   botaoSalvar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, backgroundColor: cores.primaria, padding: 16,
     borderRadius: raio.md, marginBottom: espacamento.xl,
+    marginTop: espacamento.md,
   },
   textoBotao: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

@@ -8,14 +8,29 @@ export async function inicializarBanco() {
   db = await SQLite.openDatabaseAsync('minhasfinancas.db');
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS transacoes (
-      id        TEXT PRIMARY KEY,
-      descricao TEXT NOT NULL,
-      valor     REAL NOT NULL,
-      tipo      TEXT NOT NULL,
-      categoria TEXT NOT NULL,
-      data      TEXT NOT NULL
+      id          TEXT PRIMARY KEY,
+      descricao   TEXT NOT NULL,
+      valor       REAL NOT NULL,
+      tipo        TEXT NOT NULL,
+      categoria   TEXT NOT NULL,
+      data        TEXT NOT NULL,
+      latitude    REAL,
+      longitude   REAL,
+      comprovante TEXT
     );
   `);
+
+  // Migração para quem já tinha o banco da aula anterior sem as colunas novas.
+  // PRAGMA table_info devolve as colunas existentes — só executa ALTER se ainda não existirem.
+  const colunas = await db.getAllAsync('PRAGMA table_info(transacoes)');
+  const nomes = colunas.map(c => c.name);
+  if (!nomes.includes('latitude')) {
+    await db.execAsync('ALTER TABLE transacoes ADD COLUMN latitude REAL');
+    await db.execAsync('ALTER TABLE transacoes ADD COLUMN longitude REAL');
+  }
+  if (!nomes.includes('comprovante')) {
+    await db.execAsync('ALTER TABLE transacoes ADD COLUMN comprovante TEXT');
+  }
 }
 
 // Retorna todas as transações, mais recentes primeiro
@@ -28,8 +43,20 @@ export async function buscarTodasTransacoes() {
 // Insere uma nova transação
 export async function inserirTransacao(t) {
   await db.runAsync(
-    'INSERT INTO transacoes (id, descricao, valor, tipo, categoria, data) VALUES (?, ?, ?, ?, ?, ?)',
-    [t.id, t.descricao, t.valor, t.tipo, t.categoria, t.data]
+    `INSERT INTO transacoes
+      (id, descricao, valor, tipo, categoria, data, latitude, longitude, comprovante)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      t.id,
+      t.descricao,
+      t.valor,
+      t.tipo,
+      t.categoria,
+      t.data,
+      t.latitude    ?? null,
+      t.longitude   ?? null,
+      t.comprovante ?? null,
+    ]
   );
 }
 

@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { DashboardStack } from './DashboardStack';
 import { NovaTransacaoScreen } from '../screens/NovaTransacaoScreen';
 import { RelatorioScreen } from '../screens/RelatorioScreen';
+import { MapaScreen } from '../screens/MapaScreen';
 import { SobreScreen } from '../screens/SobreScreen';
 
 const Tab = createBottomTabNavigator();
@@ -13,6 +14,7 @@ const ICONES_TAB = {
   Dashboard: { ativa: 'home', inativa: 'home-outline' },
   'Nova Transação': { ativa: 'add-circle', inativa: 'add-circle-outline' },
   Relatório: { ativa: 'bar-chart', inativa: 'bar-chart-outline' },
+  Mapa: { ativa: 'map', inativa: 'map-outline' },
   Sobre: { ativa: 'information-circle', inativa: 'information-circle-outline' },
 };
 
@@ -40,6 +42,7 @@ export function TabRoutes() {
       <Tab.Screen name="Dashboard" component={DashboardStack} />
       <Tab.Screen name="Nova Transação" component={NovaTransacaoScreen} />
       <Tab.Screen name="Relatório" component={RelatorioScreen} />
+      <Tab.Screen name="Mapa" component={MapaScreen} />
       <Tab.Screen name="Sobre" component={SobreScreen} />
     </Tab.Navigator>
   );
