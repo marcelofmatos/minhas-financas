@@ -36,7 +36,7 @@ afterEach(async () => {
   if (page) await page.close();
 });
 
-describe('Passo 8.1 — Roteiro de teste', () => {
+describe('Aula 4 — Passo 8.1 — Roteiro de teste', () => {
   test('1) Abre o app na tela vazia (sem transações)', async () => {
     await abrirApp(page);
 
