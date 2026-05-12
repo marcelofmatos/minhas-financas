@@ -1,322 +1,199 @@
-# Aula 06 — Geolocalização, Mapas e Câmera
+# Aula 07 — Publicação e Deploy
 
 ## Objetivos da Aula
 
-Solicitar permissões nativas do dispositivo (localização e câmera), capturar coordenadas GPS com `expo-location`, exibir mapa com marcadores via `react-native-maps` (no Android/iOS) e `react-leaflet` (no Web) usando uma **camada de compatibilidade** com extensões de plataforma, tirar fotos de comprovantes com `expo-image-picker` e associar localização e imagem às transações no SQLite. Foco em **uma única base de código rodando em Android, iOS e Web**.
+Configurar o `app.json` para produção, criar assets (ícone e splash), compilar com EAS Build e publicar na Google Play e App Store com OTA updates.
 
 ---
 
-## Pré-Requisitos — Configure Antes de Começar
+## O app.json — Identidade do App
 
-### Ambiente base (deve estar instalado)
+O `app.json` é o documento de identidade do seu aplicativo. Ele controla tudo que não faz parte do código JavaScript: nome, versão, ícone, permissões, identificadores de plataforma.
 
-| Item | Verificar com |
-|---|---|
-| Node.js 20.x | `node -v` |
-| Expo CLI | `expo --version` |
-| Android Studio + AVD rodando | `adb devices` |
-| Projeto `minhas-financas` das aulas 2–5 | `npx expo start` + tecla `a` |
+### Campos essenciais
 
-### Pacotes novos — instalar no início da aula
+| Campo | O que define |
+|-------|-------------|
+| `name` | Nome exibido embaixo do ícone na tela do celular |
+| `slug` | Identificador URL-amigável (sem espaços, sem acentos) |
+| `version` | Versão exibida na loja ("1.0.0") |
+| `android.package` | ID único do app no Android — usa notação de domínio invertido (`com.seunome.appname`) |
+| `android.versionCode` | Número inteiro que só sobe a cada build enviado à loja (1, 2, 3…) |
+| `ios.bundleIdentifier` | ID único no iOS — mesmo padrão do Android, nunca pode ser alterado após publicação |
+| `ios.buildNumber` | String que sobe a cada build iOS ("1", "2"…) |
 
-```bash
-npx expo install expo-location react-native-maps expo-image-picker
-npm install leaflet react-leaflet
+> **Por que domínio invertido?** O padrão `com.empresa.app` garante unicidade global. Qualquer pessoa no mundo pode registrar o mesmo nome de app, mas o package ID precisa ser único em toda a loja.
+
+### Versionamento semântico
+
+A versão visível ao usuário segue o padrão `MAJOR.MINOR.PATCH`:
+
+```
+MAJOR — mudanças incompatíveis (redesign completo, nova arquitetura)
+MINOR — novas funcionalidades sem quebrar nada (nova tela, novo relatório)
+PATCH — correções de bugs (crash resolvido, cálculo errado corrigido)
 ```
 
-| Pacote | Função | Onde executa |
+O `versionCode` (Android) e o `buildNumber` (iOS) são números internos que as lojas usam para identificar qual build é mais recente. Eles **sempre sobem** — nunca podem ser iguais ou menores que o build anterior.
+
+---
+
+## Ícone e Splash Screen
+
+As lojas exigem assets em dimensões específicas. O Expo cuida de gerar os tamanhos menores a partir das imagens originais, então você só precisa fornecer as versões grandes.
+
+| Asset | Dimensão | Formato | Uso |
+|-------|----------|---------|-----|
+| `icon.png` | 1024×1024 px | PNG **sem** transparência | iOS e Android |
+| `adaptive-icon.png` | 1024×1024 px | PNG **com** transparência | Android (ícones adaptativos) |
+| `splash.png` | 1284×2778 px | PNG | Tela de carregamento |
+
+**Por que Android tem dois ícones?** O sistema de ícones adaptativos do Android (introduzido no Android 8) separa o fundo do ícone (definido pelo sistema/fabricante) do elemento frontal (o seu desenho). Isso permite que o launcher aplique formas diferentes (círculo, quadrado arredondado) sem distorcer o ícone.
+
+**Splash screen:** aparece por menos de 2 segundos enquanto o app carrega. Mantenha simples — logo e fundo, sem texto desnecessário.
+
+---
+
+## EAS Build — Compilação na Nuvem
+
+O Expo Application Services (EAS) compila o app nos servidores da Expo, eliminando a necessidade de ter Android Studio configurado (para Android) ou um Mac com Xcode (para iOS).
+
+### Por que EAS em vez de `expo build`?
+
+| | `expo build` (antigo) | EAS Build (atual) |
 |---|---|---|
-| `expo-location` | Acessa o GPS do dispositivo | Android / iOS |
-| `react-native-maps` | Mapa nativo (Google Maps / Apple Maps) | Android / iOS |
-| `expo-image-picker` | Abre câmera ou galeria e devolve a URI da imagem | Android / iOS / Web |
-| `leaflet` + `react-leaflet` | Mapa OpenStreetMap (sem chave de API) | Web |
+| Status | Depreciado desde 2023 | Recomendado oficialmente |
+| Customização | Limitada | Total (bare workflow) |
+| Velocidade | Lenta | Significativamente mais rápida |
 
-> Por que dois comandos? `npx expo install` escolhe versões compatíveis com a SDK do Expo. `leaflet` e `react-leaflet` são bibliotecas puras de browser — instaladas via npm.
+### Os três perfis de build
+
+O arquivo `eas.json` define os perfis de build. Cada perfil serve a um momento diferente do ciclo de vida:
+
+| Perfil | Momento de uso | Formato gerado |
+|--------|---------------|----------------|
+| `development` | Desenvolvimento ativo — inclui ferramentas de debug | APK com Expo Dev Client |
+| `preview` | Distribuição para testadores sem passar pela loja | APK instalável diretamente |
+| `production` | Publicação na loja | AAB (Google Play) / IPA (App Store) |
+
+**APK vs AAB:** O APK é o formato de instalação direta — funciona em qualquer Android. O AAB (Android App Bundle) é enviado à Google Play, que então gera APKs otimizados para cada dispositivo (menor download para o usuário final).
 
 ---
 
-## Conteúdo Teórico
+## Keystore — Assinatura do App
 
-### Como funciona a geolocalização em apps mobile
+Todo app Android precisa ser assinado com uma chave criptográfica antes de ser distribuído. Essa chave é armazenada no **Keystore**.
 
-O dispositivo determina sua posição combinando três fontes:
+- O EAS gera e armazena o Keystore automaticamente na primeira vez
+- Sem o Keystore original, é impossível enviar atualizações para o mesmo app na loja
+- **Guarde o Keystore em local seguro** — perder significa criar um app novo do zero
 
-| Fonte | Precisão | Consumo de bateria |
+---
+
+## Google Play — Fluxo de Publicação
+
+A Google Play organiza a distribuição em faixas progressivas:
+
+```
+Teste Interno → Teste Fechado → Teste Aberto → Produção
+```
+
+| Faixa | Quem pode instalar | Revisão da Google | Limite |
+|-------|--------------------|-------------------|--------|
+| Teste interno | Lista de e-mails manual | Não | 100 pessoas |
+| Teste fechado (Alpha) | Lista de e-mails / grupo | Não | 2.000 pessoas |
+| Teste aberto (Beta) | Qualquer um com o link | Sim | Ilimitado |
+| Produção | Todos na loja | Sim | Ilimitado |
+
+**Por que começar pelo Teste Interno?** Porque é a única faixa sem revisão e sem limite de tempo — o app fica disponível em minutos. É ideal para validar que o build funciona antes de se comprometer com o processo de revisão.
+
+**Taxa de desenvolvedor:** US$ 25, paga uma vez, válida para sempre. A aprovação da conta pode levar até 48 horas — crie com antecedência.
+
+---
+
+## App Store — Fluxo de Publicação
+
+A Apple exige revisão humana para qualquer distribuição pública. O processo segue este caminho:
+
+```
+Build (EAS) → TestFlight (teste interno) → Revisão da Apple → App Store
+```
+
+| Etapa | Descrição |
+|-------|-----------|
+| EAS Build | Compila o `.ipa` nos servidores (não precisa de Mac) |
+| TestFlight | Programa oficial de testes da Apple — distribui para até 10.000 usuários sem revisão pública |
+| Revisão | Equipe da Apple analisa o app (1 a 3 dias úteis em média) |
+| App Store | Publicação pública |
+
+**Diferença de custo:** US$ 99/ano (contra US$ 25 único da Google). A assinatura anual é obrigatória para manter o app na loja.
+
+### Comparativo
+
+| | Google Play | App Store |
 |---|---|---|
-| GPS (satélite) | Alta (~3m) | Alto |
-| Wi-Fi | Média (~15m) | Baixo |
-| Torres de celular | Baixa (~100m) | Muito baixo |
-
-O `expo-location` com `Accuracy.Balanced` escolhe automaticamente a melhor combinação.
-
-### Permissões de localização
-
-Apps mobile precisam de permissão explícita do usuário para acessar o GPS. Existem dois tipos:
-
-- **Foreground** (`requestForegroundPermissionsAsync`) — somente enquanto o app está em uso
-- **Background** (`requestBackgroundPermissionsAsync`) — mesmo com o app fechado
-
-Nesta aula usamos apenas **foreground** — é o mais comum e aceito pelas lojas.
-
-### O que são coordenadas geográficas?
-
-```
-latitude  → posição norte-sul  (-90 a +90)
-longitude → posição leste-oeste (-180 a +180)
-
-São Paulo:  latitude -23.5505, longitude -46.6333
-Brasília:   latitude -15.7801, longitude -47.9292
-```
-
-### Níveis de precisão do expo-location
-
-| Constante | Precisão | Consumo | Quando usar |
-|-----------|----------|---------|-------------|
-| `Accuracy.Lowest` | ~3km | Mínimo | Não recomendado |
-| `Accuracy.Low` | ~1km | Muito baixo | Cidade aproximada |
-| `Accuracy.Balanced` | ~100m | Baixo | **Recomendado — uso geral** |
-| `Accuracy.High` | ~10m | Médio | Navegação turn-by-turn |
-| `Accuracy.Highest` | ~3m | Alto | Topografia, corridas |
-| `Accuracy.BestForNavigation` | ~1m | Muito alto | GPS especializado |
-
-Para marcar onde uma transação foi feita, `Balanced` é ideal — precisão suficiente sem drenar a bateria.
-
-### react-native-maps
-
-O componente `MapView` renderiza um mapa interativo usando:
-- **Google Maps** no Android
-- **Apple Maps** no iOS
-
-Principais componentes:
-
-```jsx
-<MapView initialRegion={regiao}>
-  <Marker
-    coordinate={{ latitude, longitude }}
-    pinColor="#e74c3c"       // vermelho para despesa
-    onPress={() => console.log('pin tocado')}
-  >
-    {/* Callout — balão exibido ao tocar no pin */}
-    <Callout tooltip>
-      <View style={{ padding: 8, backgroundColor: '#fff', borderRadius: 8 }}>
-        <Text style={{ fontWeight: 'bold' }}>Supermercado</Text>
-        <Text style={{ color: '#e74c3c' }}>- R$ 150,00</Text>
-        <Text style={{ color: '#999', fontSize: 12 }}>07/04/2026</Text>
-      </View>
-    </Callout>
-  </Marker>
-</MapView>
-```
-
-- **`initialRegion`**: define o centro e o zoom do mapa ao abrir (`latitudeDelta` e `longitudeDelta` controlam o zoom — valores menores = mais próximo)
-- **`pinColor`**: cor do pin (use as cores do tema para receitas/despesas)
-- **`Callout tooltip`**: remove o estilo padrão do balão e permite total customização
-- **`showsUserLocation={true}`**: exibe o ponto azul indicando a posição atual do usuário
-
-### Mapas cross-platform com extensões `.native.js` / `.web.js`
-
-`react-native-maps` usa código nativo (Java/Kotlin no Android, Swift no iOS) — abrir o app no navegador com `expo start --web` causa o erro:
-
-```
-Importing native-only module "react-native/Libraries/Utilities/codegenNativeCommands"
-on web from: node_modules/react-native-maps/lib/MapMarkerNativeComponent.js
-```
-
-A solução padrão do React Native são as **extensões de plataforma**. O Metro escolhe automaticamente o arquivo certo conforme a plataforma de build:
-
-| Arquivo | Quando é escolhido |
-|---|---|
-| `Foo.android.js` | Apenas Android |
-| `Foo.ios.js` | Apenas iOS |
-| `Foo.native.js` | Android **ou** iOS (qualquer um dos dois nativos) |
-| `Foo.web.js` | Web (Expo Web / React Native Web) |
-| `Foo.js` | Fallback se nenhuma extensão específica existir |
-
-Nesta aula criamos `components/MapaCompat.{native,web}.js` — duas implementações com a **mesma API** (`MapView`, `Marker`, `Callout`). As telas (`MapaScreen.js`, `SeletorLocalMapa.js`) importam de `./MapaCompat` sem precisar saber em qual plataforma estão rodando:
-
-```jsx
-// Esta única linha funciona em iOS, Android e Web:
-import { MapView, Marker, Callout } from '../components/MapaCompat';
-```
-
-No native, `MapaCompat.native.js` é apenas um re-export de `react-native-maps`. No web, `MapaCompat.web.js` usa `react-leaflet` + tiles do OpenStreetMap (sem chave de API). A API exposta é idêntica, então quem importa nunca precisa fazer `if (Platform.OS === 'web')`.
-
-> **Padrão geral:** sempre que uma biblioteca nativa não suporta web, crie uma camada de compatibilidade com extensões. É a forma idiomática do React Native — mesmo abordagem usada por bibliotecas como `react-native-svg`, `react-native-webview` e o próprio `react-native-web`.
-
-### Câmera e Galeria com expo-image-picker
-
-O `expo-image-picker` resolve dois cenários com a mesma API:
-
-| Função | O que faz | Permissão necessária |
-|---|---|---|
-| `launchCameraAsync(opcoes)` | Abre a **câmera** do dispositivo | `requestCameraPermissionsAsync` |
-| `launchImageLibraryAsync(opcoes)` | Abre a **galeria** de fotos | `requestMediaLibraryPermissionsAsync` |
-
-Ambas retornam um objeto no formato:
-
-```jsx
-{
-  canceled: false,
-  assets: [{ uri: 'file:///.../cache/ImagePicker/abc-123.jpg', width, height, ... }]
-}
-```
-
-Principais opções:
-
-| Opção | Efeito |
-|---|---|
-| `quality: 0.5` | Compressão JPEG (0.0 = mínima, 1.0 = máxima). Para comprovantes, 0.5 é suficiente |
-| `allowsEditing: true` | Permite ao usuário cortar/girar a imagem antes de confirmar |
-| `aspect: [3, 4]` | Proporção do recorte (só no Android; iOS deixa livre) |
-| `mediaTypes` | `'Images'`, `'Videos'` ou `'All'` (padrão: `'Images'`) |
-
-**O que se guarda no banco?** Apenas a **URI** (uma string como `file:///...`), não o binário da imagem. Isso mantém o SQLite leve. Em produção, normalmente faz-se upload da imagem para um servidor (S3, Firebase Storage) e armazena-se a URL pública resultante.
-
-**Atenção — persistência:** a URI devolvida aponta para a pasta de **cache** do app, que o sistema operacional pode limpar a qualquer momento. Para que a imagem persista, copie-a para `FileSystem.documentDirectory` (assunto de aulas futuras) ou envie para um servidor.
+| Conta | US$ 25 (taxa única) | US$ 99/ano |
+| Precisa de Mac? | Não | Não (com EAS Build) |
+| Tempo de revisão | Horas a 1 dia | 1 a 3 dias úteis |
+| Teste sem loja | APK direto | TestFlight |
+| Formato | `.aab` / `.apk` | `.ipa` |
 
 ---
 
-## Estrutura de arquivos ao final da aula
+## OTA Updates — Atualizações sem Build
 
-```
-minhas-financas/
-├── hooks/
-│   ├── useLocalizacao.js          ← NOVO: captura GPS
-│   └── useComprovante.js          ← NOVO: câmera + galeria
-├── components/
-│   ├── MapaCompat.native.js       ← NOVO: re-export de react-native-maps
-│   ├── MapaCompat.web.js          ← NOVO: implementação Leaflet + OpenStreetMap
-│   └── SeletorLocalMapa.js        ← NOVO: modal para tocar e marcar local
-├── screens/
-│   ├── MapaScreen.js              ← NOVO: tela do mapa (usa MapaCompat)
-│   ├── NovaTransacaoScreen.js     ← ATUALIZADO: localização, foto e SeletorLocalMapa
-│   └── DetalheTransacaoScreen.js  ← ATUALIZADO: coordenadas, comprovante e ScrollView
-├── routes/
-│   └── TabRoutes.js               ← ATUALIZADO: aba Mapa
-├── database/
-│   └── db.js                      ← ATUALIZADO: colunas latitude, longitude, comprovante
-└── app.json                       ← ATUALIZADO: plugins expo-location e expo-image-picker
-```
+Uma das vantagens do Expo é poder atualizar o JavaScript do app **sem um novo build** e sem passar pela revisão da loja. Isso é chamado de OTA (Over-The-Air).
+
+### Quando usar OTA vs novo build
+
+| Tipo de mudança | OTA é suficiente? |
+|-----------------|:-----------------:|
+| Correção de bug em lógica JS | ✅ sim |
+| Nova tela ou componente | ✅ sim |
+| Mudança de cores e textos | ✅ sim |
+| Nova permissão no sistema | ❌ novo build |
+| Instalação de biblioteca nativa | ❌ novo build |
+| Mudança de ícone ou splash | ❌ novo build |
+
+**Por que essa limitação?** O OTA atualiza apenas o bundle JavaScript. Qualquer coisa que envolva código nativo (Java/Kotlin no Android, Swift/Obj-C no iOS) exige recompilação — e portanto novo build.
 
 ---
 
-## Projeto Demo em Sala
+> **Atividade prática:** O passo a passo completo — configuração do `app.json`, criação do ícone, build com EAS e publicação na Google Play — está no [conteúdo complementar](./STEPS.md).
 
-> **Atividade prática:** O código completo de `useLocalizacao`, `useComprovante`, `MapaScreen`, `NovaTransacaoScreen` (com localização e câmera), `DetalheTransacaoScreen` (com foto do comprovante) e a atualização do `db.js` está no [conteúdo complementar](./STEPS.md).
+## Checklist de Produção
 
-### Como rodar
+Antes de publicar, verifique cada item:
 
-```bash
-cd minhas-financas
+### Assets
+- [ ] `icon.png` 1024×1024 sem transparência
+- [ ] `adaptive-icon.png` 1024×1024 com transparência
+- [ ] `splash.png` 1284×2778
 
-# Android / iOS (Expo Go ou emulador)
-npx expo start
-# pressione `a` para Android, `i` para iOS
+### app.json
+- [ ] `name` definido corretamente
+- [ ] `version` definida ("1.0.0")
+- [ ] `android.package` único (ex: `com.seunome.minhasfinancas`)
+- [ ] `android.versionCode` = 1
+- [ ] `ios.bundleIdentifier` definido
 
-# Web (OpenStreetMap via Leaflet)
-npx expo start --web
-```
+### Funcional
+- [ ] App funciona sem erros no emulador
+- [ ] Dados persistem ao fechar e reabrir
+- [ ] Nenhum `console.log` com dados sensíveis
 
-Para simular localização no emulador Android: Android Studio → Extended Controls (⋯) → Location → defina as coordenadas e clique em **"Send"**.
-
-Se o Expo Go não conectar (`IOException: Failed to download remote update`), tente `npx expo start --tunnel` ou conecte via USB com `adb reverse tcp:8081 tcp:8081`.
-
-### O que o demo mostra
-
-| Funcionalidade | Conceito demonstrado |
-|----------------|----------------------|
-| Botão "Minha localização" | `requestForegroundPermissionsAsync` + `getCurrentPositionAsync` |
-| Botão "Escolher no mapa" | `SeletorLocalMapa` (`Modal` + `MapView` + `onPress`) |
-| Botão "Tirar foto" | `requestCameraPermissionsAsync` + `launchCameraAsync` |
-| Botão "Da galeria" | `requestMediaLibraryPermissionsAsync` + `launchImageLibraryAsync` |
-| Preview do comprovante | `Image` + botão de remover sobreposto |
-| Tela de Mapa com pins | `MapView`, `Marker`, `Callout` via `MapaCompat` |
-| Cor do pin por tipo | `pinColor` condicional (verde = receita, vermelho = despesa) |
-| Toque no pin exibe detalhes | `Callout tooltip` customizado |
-| Detalhe da transação com foto | `Image` dentro de `ScrollView` (rola quando há foto grande) |
-| Tela vazia sem localização | Empty state com ícone |
-| Localização e foto no SQLite | Colunas `latitude`, `longitude` e `comprovante` opcionais |
-| Migração automática do banco | `PRAGMA table_info` + `ALTER TABLE` |
-| Mesma base nas 3 plataformas | Extensões `.native.js` / `.web.js` em `MapaCompat` |
-
-### Estrutura do projeto demo
-
-```
-minhas-financas/
-├── hooks/
-│   ├── useLocalizacao.js          # encapsula permissão + GPS
-│   └── useComprovante.js          # encapsula câmera e galeria
-├── components/
-│   ├── MapaCompat.native.js       # adapter para react-native-maps
-│   ├── MapaCompat.web.js          # adapter para react-leaflet
-│   └── SeletorLocalMapa.js        # modal cross-platform de seleção de local
-├── screens/
-│   ├── MapaScreen.js              # importa de MapaCompat (funciona nos 3 ambientes)
-│   ├── NovaTransacaoScreen.js     # formulário com localização, foto e mapa
-│   └── DetalheTransacaoScreen.js  # comprovante e coordenadas dentro de ScrollView
-├── routes/
-│   └── TabRoutes.js               # aba Mapa adicionada
-└── database/
-    └── db.js                      # colunas latitude, longitude e comprovante
-```
-
----
-
----
-
----
-
-
-## Observações sobre produção
-
-### Chave de API do Google Maps (Android)
-
-No Expo Go e builds de desenvolvimento, o mapa funciona sem chave. Para builds de produção (APK/AAB), é necessário:
-
-1. Criar uma chave em [console.cloud.google.com](https://console.cloud.google.com)
-2. Ativar "Maps SDK for Android"
-3. Adicionar no `app.json`:
-```json
-"android": {
-  "config": {
-    "googleMaps": { "apiKey": "SUA_CHAVE_AQUI" }
-  }
-}
-```
-
-### Configurar localização no emulador
-
-No Android Studio: Extended Controls (⋯) → Location → defina as coordenadas e clique em "Send".
-
-### Câmera no emulador e simulador
-
-- **Emulador Android:** possui câmera virtual. Acesse por **Extended Controls (⋯) → Camera** ou abra o app de câmera nativo do Android para garantir que esteja habilitada antes de testar.
-- **iOS Simulator:** **não tem câmera**. Para testar comprovantes, use a opção **"Da galeria"** (ou execute em um dispositivo físico via TestFlight/EAS).
-
-### Permissão de câmera no `app.json`
-
-O plugin do `expo-image-picker` exige que a mensagem exibida no diálogo de permissão seja definida no `app.json`:
-
-```json
-"plugins": [
-  "expo-sqlite",
-  "expo-location",
-  [
-    "expo-image-picker",
-    { "cameraPermission": "Permita o acesso à câmera para fotografar comprovantes." }
-  ]
-]
-```
+### Loja
+- [ ] Conta de desenvolvedor criada e aprovada
+- [ ] Ficha da loja preenchida (título, descrição, screenshots, categoria)
+- [ ] Classificação de conteúdo respondida
 
 ---
 
 ## Referências
 
-- [Documentação expo-location](https://docs.expo.dev/versions/latest/sdk/location/)
-- [Documentação react-native-maps](https://github.com/react-native-maps/react-native-maps)
-- [Documentação expo-image-picker](https://docs.expo.dev/versions/latest/sdk/imagepicker/)
-- [react-leaflet](https://react-leaflet.js.org/) — componentes React para o Leaflet
-- [Leaflet](https://leafletjs.com/) — biblioteca JS para mapas interativos
-- [OpenStreetMap](https://www.openstreetmap.org/) — tiles e licença usados pelo `MapaCompat.web.js`
-- [Platform-specific code (React Native)](https://reactnative.dev/docs/platform-specific-code) — extensões `.native.js` / `.web.js`
-- [Google Maps Platform](https://console.cloud.google.com) — chaves de API (apenas builds nativos de produção)
+- [EAS Build — documentação oficial](https://docs.expo.dev/build/introduction/)
+- [Publicar na Google Play com EAS](https://docs.expo.dev/submit/android/)
+- [OTA Updates com eas update](https://docs.expo.dev/eas-update/introduction/)
+- [app.json — todas as propriedades](https://docs.expo.dev/versions/latest/config/app/)
+- [Google Play Console](https://play.google.com/console)
+- [Diretrizes de revisão da App Store](https://developer.apple.com/app-store/review/guidelines/)
