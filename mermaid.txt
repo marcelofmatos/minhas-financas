@@ -1,0 +1,109 @@
+graph TD
+    App[App.js]
+    Safe[SafeAreaProvider]
+    Nav[NavigationContainer]
+    Ctx[TransacoesContext]
+    TabRoutes[TabRoutes]
+    DashStack[DashboardStack]
+
+    Dash[DashboardScreen]
+    Detalhe[DetalheTransacaoScreen]
+    Nova[NovaTransacaoScreen]
+    Rel[RelatorioScreen]
+    Mapa[MapaScreen]
+    Sobre[SobreScreen]
+
+    CartaoSaldo[CartaoSaldo]
+    CardsResumo[CardsResumo]
+    ItemTransacao[ItemTransacao]
+    CartaoCot[CartaoCotacoes]
+    SeletorLocal[SeletorLocalMapa]
+    MapaCompat[MapaCompat .native / .web]
+
+    Cotacoes[useCotacoes]
+    Localizacao[useLocalizacao]
+    Comprovante[useComprovante]
+
+    DB[(database/db.js<br/>+ migração lat/long/comprovante)]
+    SQLite[(SQLite minhasfinancas.db)]
+    API{{API AwesomeAPI USD-BRL}}
+    GPS{{expo-location · GPS do dispositivo}}
+    Picker{{expo-image-picker · câmera / galeria}}
+    Maps{{react-native-maps / Leaflet web}}
+
+    App --> Safe
+    Safe --> Ctx
+    Ctx --> Nav
+    Nav --> TabRoutes
+
+    TabRoutes --> DashStack
+    TabRoutes --> Nova
+    TabRoutes --> Rel
+    TabRoutes --> Mapa
+    TabRoutes --> Sobre
+
+    DashStack --> Dash
+    DashStack --> Detalhe
+
+    Dash --> CartaoSaldo
+    Dash --> CardsResumo
+    Dash --> ItemTransacao
+    Dash --> CartaoCot
+    Dash --> Ctx
+    Nova --> Ctx
+    Rel --> Ctx
+    Mapa --> Ctx
+    ItemTransacao --> Detalhe
+
+    CartaoCot --> Cotacoes
+    Cotacoes --> API
+
+    Nova --> Localizacao
+    Nova --> Comprovante
+    Nova --> SeletorLocal
+    SeletorLocal --> MapaCompat
+    Mapa --> MapaCompat
+    Localizacao --> GPS
+    Comprovante --> Picker
+    MapaCompat --> Maps
+
+    Detalhe --> Maps
+
+    Ctx --> DB
+    DB --> SQLite
+
+    classDef raiz fill:#dbeafe,stroke:#1e3a8a,color:#1e3a8a,stroke-width:2px
+    classDef contexto fill:#fef3c7,stroke:#92400e,color:#92400e,stroke-width:2px
+    classDef tela fill:#dcfce7,stroke:#166534,color:#166534,stroke-width:2px
+    classDef componente fill:#ede9fe,stroke:#5b21b6,color:#5b21b6,stroke-width:2px
+    classDef hook fill:#fce7f3,stroke:#9d174d,color:#9d174d,stroke-width:2px
+    classDef externo fill:#f3f4f6,stroke:#374151,color:#111827,stroke-width:2px
+
+    class App,Safe,Nav,TabRoutes,DashStack raiz
+    class Ctx contexto
+    class Dash,Detalhe,Nova,Rel,Mapa,Sobre tela
+    class CartaoSaldo,CardsResumo,ItemTransacao,CartaoCot,SeletorLocal,MapaCompat componente
+    class Cotacoes,Localizacao,Comprovante hook
+    class DB,SQLite,API,GPS,Picker,Maps externo
+
+    %% Links das caixas para os arquivos no projeto (relativos à raiz do repo)
+    click App "App.js" "App.js"
+    click Ctx "context/TransacoesContext.js" "context/TransacoesContext.js"
+    click TabRoutes "routes/TabRoutes.js" "routes/TabRoutes.js"
+    click DashStack "routes/DashboardStack.js" "routes/DashboardStack.js"
+    click Dash "screens/DashboardScreen.js" "screens/DashboardScreen.js"
+    click Detalhe "screens/DetalheTransacaoScreen.js" "screens/DetalheTransacaoScreen.js"
+    click Nova "screens/NovaTransacaoScreen.js" "screens/NovaTransacaoScreen.js"
+    click Rel "screens/RelatorioScreen.js" "screens/RelatorioScreen.js"
+    click Mapa "screens/MapaScreen.js" "screens/MapaScreen.js"
+    click Sobre "screens/SobreScreen.js" "screens/SobreScreen.js"
+    click CartaoSaldo "components/CartaoSaldo.js" "components/CartaoSaldo.js"
+    click CardsResumo "components/CardsResumo.js" "components/CardsResumo.js"
+    click ItemTransacao "components/ItemTransacao.js" "components/ItemTransacao.js"
+    click CartaoCot "components/CartaoCotacoes.js" "components/CartaoCotacoes.js"
+    click SeletorLocal "components/SeletorLocalMapa.js" "components/SeletorLocalMapa.js"
+    click MapaCompat "components/MapaCompat.native.js" "components/MapaCompat.native.js / .web.js"
+    click Cotacoes "hooks/useCotacoes.js" "hooks/useCotacoes.js"
+    click Localizacao "hooks/useLocalizacao.js" "hooks/useLocalizacao.js"
+    click Comprovante "hooks/useComprovante.js" "hooks/useComprovante.js"
+    click DB "database/db.js" "database/db.js"
