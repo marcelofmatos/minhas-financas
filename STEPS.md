@@ -41,12 +41,12 @@ Substitua o conteúdo por:
   "expo": {
     "name": "Minhas Finanças",
     "slug": "minhas-financas",
-    "version": "1.0.0",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#2c3e50"
     },
@@ -76,14 +76,16 @@ Substitua o conteúdo por:
 
 > **Não remova o array `plugins`** — ele declara `expo-sqlite` (Aula 5) e `expo-location` (Aula 6). Sem essas entradas o build nativo falha em tempo de execução ao acessar o banco ou o GPS.
 
+> **`version`:** use a versão atual do **seu** projeto, não `"1.0.0"` fixo. Neste módulo o app saiu da `1.0.0` (Aula 1) e recebeu um incremento MINOR a cada aula — ao fim da Aula 6 ele estava em **`1.5.0`**, então é esse o número que vai aqui. O `versionCode` (Android) e o `buildNumber` (iOS) são contadores internos das lojas: começam em `1` e sobem a cada novo envio, independentemente do valor de `version`.
+
 ### 1.2 — Entendendo o versionamento
 
 Sempre que você fizer um novo build para publicar na loja, precisará aumentar:
-- `version`: a string que o usuário vê ("1.0.0" → "1.0.1" → "1.1.0")
+- `version`: a string que o usuário vê ("1.5.0" → "1.5.1" → "1.6.0")
 - `android.versionCode`: número inteiro que só sobe (1 → 2 → 3 → ...)
 
 ```
-version:     "1.0.0"  →  "1.0.1"  →  "1.1.0"  →  "2.0.0"
+version:     "1.5.0"  →  "1.5.1"  →  "1.6.0"  →  "2.0.0"
 versionCode:     1    →      2    →      3     →      4
 ```
 
@@ -102,7 +104,7 @@ versionCode:     1    →      2    →      3     →      4
 3. Em **"Background"**, defina a cor `#2c3e50`
 4. Em **"Foreground"**, defina a cor `#2ecc71`
 5. Ajuste o tamanho e padding até ficar satisfeito
-6. Clique em **"Download"** — baixa um `.zip` com todos os tamanhos prontos, incluindo `icon.png` e `adaptive-icon.png`
+6. Clique em **"Download"** — baixa um `.zip` (ex.: `iconkitchen-1234.zip`) com as pastas `ios/`, `android/` e `web/`, contendo todos os tamanhos prontos
 
 ---
 
@@ -128,23 +130,67 @@ versionCode:     1    →      2    →      3     →      4
 
 ### 2.1 — Salvar os arquivos no projeto
 
-Após baixar pela ferramenta escolhida, salve na pasta `assets/`:
+O `app.json` já espera dois arquivos na pasta `assets/`:
 
-- `icon.png` — ícone principal (mínimo 1024×1024 px, sem transparência)
-- `adaptive-icon.png` — pode usar o mesmo arquivo que o `icon.png`
+- `icon.png` — ícone principal (mínimo 1024×1024 px, **sem** transparência)
+- `adaptive-icon.png` — camada frontal do ícone adaptativo do Android (**com** transparência)
 
-No VS Code: arraste os arquivos diretamente para a pasta `assets/` no explorador lateral.
+**Se você usou o icon.kitchen (Opção A):** o `.zip` baixado traz as pastas `ios/`, `android/` e `web/`. Extraia tudo dentro de `assets/icons/` (crie a pasta):
+
+```
+assets/icons/
+├── android/
+│   ├── play_store_512.png
+│   └── res/mipmap-*/ic_launcher*.png
+├── ios/
+│   └── AppIcon~ios-marketing.png        # 1024×1024
+└── web/
+    └── favicon.ico, icon-*.png
+```
+
+Depois copie os arquivos que o Expo realmente usa para a raiz de `assets/`:
+
+```bash
+cp assets/icons/ios/AppIcon~ios-marketing.png assets/icon.png
+cp assets/icons/android/res/mipmap-xxxhdpi/ic_launcher_foreground.png assets/adaptive-icon.png
+cp assets/icons/android/play_store_512.png assets/play_store_512.png
+```
+
+Resumo dos arquivos de imagem editados (referência):
+
+| Arquivo criado | Origem (icon.kitchen) | Dim. |
+|---|---|---|
+| `assets/icon.png` | `assets/icons/ios/AppIcon~ios-marketing.png` | 1024×1024 (sem transparência) |
+| `assets/adaptive-icon.png` | `assets/icons/android/res/mipmap-xxxhdpi/ic_launcher_foreground.png` | 432×432 (transparente) |
+| `assets/play_store_512.png` | `assets/icons/android/play_store_512.png` | 512×512 |
+
+- `icon.png` → ícone do app no iOS e no Android
+- `adaptive-icon.png` → camada frontal do ícone adaptativo do Android
+- `play_store_512.png` → ícone da ficha da Google Play (usado depois, no Passo 7.3)
+
+> O `ic_launcher_foreground.png` tem só 432×432 — funciona, mas se o icon.kitchen oferecer baixar o *foreground* em 1024 px, prefira essa versão. Em último caso, use o próprio `AppIcon~ios-marketing.png` também como `adaptive-icon.png`.
+
+> Feito isso, a pasta `assets/icons/` não é mais necessária — pode apagá-la.
+
+**Se você usou o favicon.io ou o Canva (Opção B/C):** renomeie a imagem 512×512 (ou 1024×1024) baixada para `icon.png`, copie para `assets/` e use o mesmo arquivo como `adaptive-icon.png`. No VS Code: arraste os arquivos diretamente para a pasta `assets/` no explorador lateral.
 
 > Mantenha o design simples — ícones complexos ficam ilegíveis em tamanhos pequenos (48×48 px na tela do celular).
 
-### 2.2 — Criar a splash screen
+### 2.2 — Definir a splash screen
 
-Use o Canva ou qualquer editor de imagem com dimensões **1284 × 2778 pixels**:
+Você **não precisa** de uma imagem dedicada para a splash. A forma mais simples é reaproveitar o próprio ícone — o `app.json` do Passo 1 já está assim:
 
-1. Mesmo fundo `#2c3e50`
-2. Texto "Minhas Finanças" em branco, fonte grande, centralizado
-3. Exporte como PNG com o nome `splash.png`
-4. Salve em `assets/splash.png`
+```json
+"splash": {
+  "image": "./assets/icon.png",
+  "resizeMode": "contain",
+  "backgroundColor": "#2c3e50"
+}
+```
+
+Resultado: durante os ~2 segundos de carregamento o ícone aparece centralizado sobre o fundo `#2c3e50`. Nada a fazer aqui.
+
+> **Opcional — splash personalizada:** se quiser uma tela com logo + o texto "Minhas Finanças", crie no Canva (ou qualquer editor) um PNG de **1284 × 2778 px**, fundo `#2c3e50`, texto branco centralizado, salve em `assets/splash.png` e troque `splash.image` para `"./assets/splash.png"`. Nenhuma loja exige isso — é só acabamento.
 
 ---
 
