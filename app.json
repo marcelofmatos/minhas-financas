@@ -28,6 +28,11 @@
       "edgeToEdgeEnabled": true,
       "package": "com.marcelofmatos.minhasfinancas",
       "versionCode": 1,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyANx36tLNNRW7O6QhIdwe2kHQ3PvaDfQ2A"
+        }
+      },
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.CAMERA",
