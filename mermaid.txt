@@ -24,7 +24,7 @@ graph TD
     Localizacao[useLocalizacao]
     Comprovante[useComprovante]
 
-    DB[(database/db.js<br/>+ migração lat/long/comprovante)]
+    DB[(database/db.js + migração lat/long/comprovante)]
     SQLite[(SQLite minhasfinancas.db)]
     API{{API AwesomeAPI USD-BRL}}
     GPS{{expo-location · GPS do dispositivo}}
@@ -86,24 +86,24 @@ graph TD
     class Cotacoes,Localizacao,Comprovante hook
     class DB,SQLite,API,GPS,Picker,Maps externo
 
-    %% Links das caixas para os arquivos no projeto (relativos à raiz do repo)
-    click App "App.js" "App.js"
-    click Ctx "context/TransacoesContext.js" "context/TransacoesContext.js"
-    click TabRoutes "routes/TabRoutes.js" "routes/TabRoutes.js"
-    click DashStack "routes/DashboardStack.js" "routes/DashboardStack.js"
-    click Dash "screens/DashboardScreen.js" "screens/DashboardScreen.js"
-    click Detalhe "screens/DetalheTransacaoScreen.js" "screens/DetalheTransacaoScreen.js"
-    click Nova "screens/NovaTransacaoScreen.js" "screens/NovaTransacaoScreen.js"
-    click Rel "screens/RelatorioScreen.js" "screens/RelatorioScreen.js"
-    click Mapa "screens/MapaScreen.js" "screens/MapaScreen.js"
-    click Sobre "screens/SobreScreen.js" "screens/SobreScreen.js"
-    click CartaoSaldo "components/CartaoSaldo.js" "components/CartaoSaldo.js"
-    click CardsResumo "components/CardsResumo.js" "components/CardsResumo.js"
-    click ItemTransacao "components/ItemTransacao.js" "components/ItemTransacao.js"
-    click CartaoCot "components/CartaoCotacoes.js" "components/CartaoCotacoes.js"
-    click SeletorLocal "components/SeletorLocalMapa.js" "components/SeletorLocalMapa.js"
-    click MapaCompat "components/MapaCompat.native.js" "components/MapaCompat.native.js / .web.js"
-    click Cotacoes "hooks/useCotacoes.js" "hooks/useCotacoes.js"
-    click Localizacao "hooks/useLocalizacao.js" "hooks/useLocalizacao.js"
-    click Comprovante "hooks/useComprovante.js" "hooks/useComprovante.js"
-    click DB "database/db.js" "database/db.js"
+    %% Links das caixas para os arquivos no projeto
+    click App href "https://github.com/marcelofmatos/minhas-financas/blob/main/App.js" "App.js"
+    click Ctx href "https://github.com/marcelofmatos/minhas-financas/blob/main/context/TransacoesContext.js" "context/TransacoesContext.js"
+    click TabRoutes href "https://github.com/marcelofmatos/minhas-financas/blob/main/routes/TabRoutes.js" "routes/TabRoutes.js"
+    click DashStack href "https://github.com/marcelofmatos/minhas-financas/blob/main/routes/DashboardStack.js" "routes/DashboardStack.js"
+    click Dash href "https://github.com/marcelofmatos/minhas-financas/blob/main/screens/DashboardScreen.js" "screens/DashboardScreen.js"
+    click Detalhe href "https://github.com/marcelofmatos/minhas-financas/blob/main/screens/DetalheTransacaoScreen.js" "screens/DetalheTransacaoScreen.js"
+    click Nova href "https://github.com/marcelofmatos/minhas-financas/blob/main/screens/NovaTransacaoScreen.js" "screens/NovaTransacaoScreen.js"
+    click Rel href "https://github.com/marcelofmatos/minhas-financas/blob/main/screens/RelatorioScreen.js" "screens/RelatorioScreen.js"
+    click Mapa href "https://github.com/marcelofmatos/minhas-financas/blob/main/screens/MapaScreen.js" "screens/MapaScreen.js"
+    click Sobre href "https://github.com/marcelofmatos/minhas-financas/blob/main/screens/SobreScreen.js" "screens/SobreScreen.js"
+    click CartaoSaldo href "https://github.com/marcelofmatos/minhas-financas/blob/main/components/CartaoSaldo.js" "components/CartaoSaldo.js"
+    click CardsResumo href "https://github.com/marcelofmatos/minhas-financas/blob/main/components/CardsResumo.js" "components/CardsResumo.js"
+    click ItemTransacao href "https://github.com/marcelofmatos/minhas-financas/blob/main/components/ItemTransacao.js" "components/ItemTransacao.js"
+    click CartaoCot href "https://github.com/marcelofmatos/minhas-financas/blob/main/components/CartaoCotacoes.js" "components/CartaoCotacoes.js"
+    click SeletorLocal href "https://github.com/marcelofmatos/minhas-financas/blob/main/components/SeletorLocalMapa.js" "components/SeletorLocalMapa.js"
+    click MapaCompat href "https://github.com/marcelofmatos/minhas-financas/blob/main/components/MapaCompat.native.js" "components/MapaCompat.native.js / .web.js"
+    click Cotacoes href "https://github.com/marcelofmatos/minhas-financas/blob/main/hooks/useCotacoes.js" "hooks/useCotacoes.js"
+    click Localizacao href "https://github.com/marcelofmatos/minhas-financas/blob/main/hooks/useLocalizacao.js" "hooks/useLocalizacao.js"
+    click Comprovante href "https://github.com/marcelofmatos/minhas-financas/blob/main/hooks/useComprovante.js" "hooks/useComprovante.js"
+    click DB href "https://github.com/marcelofmatos/minhas-financas/blob/main/database/db.js" "database/db.js"
