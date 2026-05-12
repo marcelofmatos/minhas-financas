@@ -1,6 +1,6 @@
 # Testes E2E — minhas-financas
 
-Suítes automatizadas que executam os roteiros de teste dos `STEPS.md` contra o app rodando no Expo Web, usando **Jest + Puppeteer**. Material didático: cada teste mapeia para um item do roteiro da aula correspondente, e a seção [Simulando erros](#simulando-erros) ensina a fazer os testes falharem de propósito para ver regressões reais.
+Suítes automatizadas que executam os roteiros de teste dos `STEPS.md` contra o app rodando no Expo Web, usando **Jest + Puppeteer**. Material didático: cada teste mapeia para um item do roteiro da aula correspondente.
 
 ---
 
@@ -11,7 +11,6 @@ tests/
 ├── package.json                  # deps: jest, jest-html-reporters, puppeteer
 ├── jest.config.js                # reporters: default + jest-html-reporters
 ├── helpers.js                    # utilitários compartilhados (find-by-text, fiber, etc.)
-├── aula4-passo-8.1.test.js       # Aula 4 — roteiro 8.1 (AsyncStorage CRUD)
 ├── aula5-passo-7.2.test.js       # Aula 5 — roteiro 7.2 (Botão Excluir)
 ├── README.md                     # este arquivo
 └── reports/
@@ -49,7 +48,6 @@ BASE_URL=http://localhost:8082 HEADLESS=false npm test
 ### Rodar apenas uma aula ou um passo
 
 ```bash
-npx jest aula4               # Aula 4 (passo 8.1)
 npx jest aula5               # Aula 5 (passo 7.2)
 npx jest aula5-passo-7.2     # mesma coisa, mais explícito
 ```
@@ -59,17 +57,6 @@ Relatórios HTML em `tests/reports/YYYY-MM-DDTHH-MM-report.html` após cada exec
 ---
 
 ## Cobertura
-
-### Aula 4 — `aula4-passo-8.1.test.js`
-
-Suíte do passo 8.1 da Aula 4 (CRUD com AsyncStorage). Cada teste limpa o `localStorage` (equivalente ao AsyncStorage zerado) antes de rodar.
-
-| Teste                                              | Sub-passos | O que valida                                                |
-| -------------------------------------------------- | ---------- | ------------------------------------------------------------ |
-| `1) Abre o app na tela vazia`                      | 1          | Empty state com ícone de carteira e instrução               |
-| `2-5) Adiciona receita e despesa; saldo = 3050`    | 2, 3, 4, 5 | Formulário salva, lista atualiza, saldo é `receitas - despesas` |
-| `6) Transações persistem após fechar/reabrir`      | 6          | `AsyncStorage.setItem` na adição, leitura no `useEffect`    |
-| `7-8) Item tem onLongPress; remover esvazia lista` | 7, 8       | `onLongPress` ligado em `ItemTransacao`, `removerTransacao` apaga do estado e do storage |
 
 ### Aula 5 — `aula5-passo-7.2.test.js`
 
@@ -99,15 +86,15 @@ class Alert {
 }
 ```
 
-Logo, no Expo Web, o fluxo `onLongPress → Alert.alert → botão "Excluir" → removerTransacao` **não completa pelo navegador**. Nenhum gesto sintético (touch, mouse hold, dispatch de pointer events) muda isso — a chamada `Alert.alert(...)` simplesmente não faz nada.
+Logo, no Expo Web, o fluxo `onLongPress → Alert.alert → botão "Excluir" → removerTransacao` **não completa pelo navegador**. Nenhum gesto sintético (touch, mouse hold, dispatch de pointer events) muda isso — a chamada `Alert.alert(...)` simplesmente não faz nada. No dispositivo real o `Alert.alert` funciona normalmente; a limitação é apenas do RN-web.
 
-**Solução adotada em `aula4-passo-8.1.test.js` (teste 7-8):** acessar o fiber do React, validar que o item tem `onLongPress` ligado e que o contexto expõe `removerTransacao`, e então chamar `removerTransacao(id)` diretamente — equivalente a confirmar "Excluir" no celular. No dispositivo real o `Alert.alert` funciona normalmente; a limitação é apenas do RN-web.
+Para validar esse caminho sem o `Alert`, acessa-se o fiber do React: confere que o item tem `onLongPress` ligado e que o contexto expõe `removerTransacao`, e então chama-se `removerTransacao(id)` diretamente — equivalente a confirmar "Excluir" no celular. (Ver `helpers.excluirComToqueLongo`.)
 
 **Solução adotada na Aula 5 (Passo 7):** a `DetalheTransacaoScreen` usa `if (Platform.OS === 'web') window.confirm(...)` em vez de `Alert.alert`. O `aula5-passo-7.2.test.js` instrumenta `window.confirm` para capturar a mensagem e controlar OK/Cancelar — não precisa de fiber para esse caminho.
 
 ### Persistência no Expo Web
 
-- **Aula 4 (AsyncStorage):** vai para `localStorage`. `helpers.novaPagina` limpa a chave `@minhasfinancas:transacoes` antes de cada teste.
+- **AsyncStorage:** vai para `localStorage`. O helper `helpers.novaPagina` limpa a chave `@minhasfinancas:transacoes` ao abrir uma página nova.
 - **Aula 5 (SQLite):** o `expo-sqlite` em modo web usa **WebAssembly** e armazena os dados em **IndexedDB**. O helper `novaPaginaLimpa` (inlined em `aula5-passo-7.2.test.js`) usa CDP `Storage.clearDataForOrigin` para zerar tudo (localStorage + IndexedDB + cookies) e tem fallback em JS.
 
 ### Tela de boas-vindas
@@ -117,75 +104,19 @@ Logo, no Expo Web, o fluxo `onLongPress → Alert.alert → botão "Excluir" →
 
 ---
 
-## Simulando erros — material didático da Aula 4
+## Simulando erros — material didático
 
-Para ver o relatório HTML mostrando uma falha (útil em sala), aplique uma das alterações abaixo no app, rode `npm test` e abra o `reports/...html`. Reverta depois com `git checkout <arquivo>`.
+Para ver o relatório HTML mostrando uma falha (útil em sala), aplique uma alteração que quebre o comportamento esperado, rode `npm test` e abra o `reports/...html`. Reverta depois com `git checkout <arquivo>`.
 
-### Opção 1 — Quebrar a persistência (teste 6 falha)
+### Esquecer o `onLongPress` no Dashboard (teste 7 falha)
 
-Por que é didática: é exatamente o bug que motivou a Aula 4 — sem `AsyncStorage.setItem`, os dados somem ao fechar o app.
+`screens/DashboardScreen.js`, dentro do `transacoes.map(...)`: comente a prop `onLongPress` do `<ItemTransacao>`. O teste `7. o toque longo na lista do Dashboard segue ativo como atalho` deixa de encontrar o handler no fiber e falha.
 
-`context/TransacoesContext.js`, função `adicionarTransacao` (versão da Aula 4, antes do SQLite):
-
-```js
-async function adicionarTransacao(novaTransacao) {
-  const atualizadas = [novaTransacao, ...transacoes];
-  setTransacoes(atualizadas);
-  // await AsyncStorage.setItem(CHAVE_STORAGE, JSON.stringify(atualizadas)); // ← comentado
-}
-```
-
-**Resultado esperado no relatório:**
-
-- ✓ 1) Abre o app na tela vazia
-- ✓ 2-5) Adiciona receita e despesa; saldo = 3050
-- ✗ **6) Transações persistem após fechar/reabrir** — `Expected length: 1, Received length: 0`
-- ✓ 7-8) onLongPress + remover
-
-### Opção 2 — Quebrar o cálculo do saldo (teste 2-5 falha)
-
-`context/TransacoesContext.js`:
-
-```js
-const valor = {
-  ...
-  saldo: receitas + despesas,   // ← era receitas - despesas
-  ...
-};
-```
-
-**Resultado esperado:**
-
-- ✗ **2-5) Adiciona receita e despesa; saldo = 3050** — `Expected: 3050, Received: 3350`
-
-### Opção 3 — Esquecer o `onLongPress` (teste 7-8 falha)
-
-`screens/DashboardScreen.js`, dentro do `transacoes.map(...)`:
-
-```jsx
-<ItemTransacao
-  key={t.id}
-  descricao={t.descricao}
-  valor={t.valor}
-  tipo={t.tipo}
-  categoria={t.categoria}
-  data={t.data}
-  onPress={() => navigation.navigate('DetalheTransacao', { transacao: t })}
-  // onLongPress={() => confirmarExclusao(t.id, t.descricao)}  ← comentado
-/>
-```
-
-**Resultado esperado:**
-
-- ✗ **7-8) Item tem onLongPress ligado; remover via contexto esvazia a lista e o storage** — `Falha ao acionar exclusão: sem_onLongPress`
-
----
-
-## Como reverter qualquer simulação
+### Reverter qualquer simulação
 
 ```bash
 cd minhas-financas
-git checkout context/TransacoesContext.js screens/DashboardScreen.js
+git checkout screens/DashboardScreen.js
 npm test --prefix tests
 ```
 
