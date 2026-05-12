@@ -1,199 +1,212 @@
-# Aula 07 — Publicação e Deploy
+# Minhas Finanças
 
-## Objetivos da Aula
+App de **controle financeiro pessoal** feito em React Native + Expo, desenvolvido aula a aula no **Módulo 06 — Mobile** do Curso de Capacitação em Desenvolvimento Full Stack da **ITEAM** (Prof. Marcelo Matos).
 
-Configurar o `app.json` para produção, criar assets (ícone e splash), compilar com EAS Build e publicar na Google Play e App Store com OTA updates.
+Registra receitas e despesas, calcula o saldo em tempo real, guarda tudo localmente no dispositivo, e — a partir da Aula 06 — sabe **onde** cada transação aconteceu (GPS + mapa) e **com o quê** (foto do comprovante). Roda em **Android, iOS e Web** com o mesmo código.
+
+> Versão atual: **`1.5.0`** (Aula 06). A linha do tempo completa de versões está em [`RELEASE.md`](./RELEASE.md).
 
 ---
 
-## O app.json — Identidade do App
+## Arquitetura
 
-O `app.json` é o documento de identidade do seu aplicativo. Ele controla tudo que não faz parte do código JavaScript: nome, versão, ícone, permissões, identificadores de plataforma.
+![Arquitetura do projeto Minhas Finanças](./grafico_projeto.excalidraw.svg)
 
-### Campos essenciais
+O app é organizado em camadas bem separadas:
 
-| Campo | O que define |
-|-------|-------------|
-| `name` | Nome exibido embaixo do ícone na tela do celular |
-| `slug` | Identificador URL-amigável (sem espaços, sem acentos) |
-| `version` | Versão exibida na loja ("1.0.0") |
-| `android.package` | ID único do app no Android — usa notação de domínio invertido (`com.seunome.appname`) |
-| `android.versionCode` | Número inteiro que só sobe a cada build enviado à loja (1, 2, 3…) |
-| `ios.bundleIdentifier` | ID único no iOS — mesmo padrão do Android, nunca pode ser alterado após publicação |
-| `ios.buildNumber` | String que sobe a cada build iOS ("1", "2"…) |
+| Camada | Pasta | Responsabilidade |
+|--------|-------|------------------|
+| **Entrada** | `App.js`, `index.js` | Monta os providers (`SafeAreaProvider` → `PrimeiroAcessoProvider` → `TransacoesProvider`) e o `NavigationContainer` |
+| **Navegação** | `routes/` | `TabRoutes` (5 abas) → `DashboardStack` (Dashboard + Detalhe); `DrawerRoutes` disponível |
+| **Telas** | `screens/` | Cada tela é um arquivo: Dashboard, Nova Transação, Relatório, Mapa, Sobre, Detalhe e Boas-Vindas |
+| **Componentes** | `components/` | UI reutilizável: cartão de saldo, cards de resumo, item de transação, cartão de cotações, seletor de local, camada de mapa |
+| **Estado** | `context/` | `TransacoesContext` (CRUD + saldo) e `PrimeiroAcessoContext` (onboarding) via Context API |
+| **Hooks** | `hooks/` | `useCotacoes` (API de câmbio), `useLocalizacao` (GPS), `useComprovante` (câmera/galeria) |
+| **Persistência** | `database/db.js` | SQLite (`expo-sqlite`) com migração automática de schema |
+| **Tema** | `theme.js` | Paleta de cores, espaçamentos e raios de borda compartilhados |
+| **Testes** | `tests/` | E2E com Jest + Puppeteer contra o Expo Web ([detalhes](./tests/README.md)) |
 
-> **Por que domínio invertido?** O padrão `com.empresa.app` garante unicidade global. Qualquer pessoa no mundo pode registrar o mesmo nome de app, mas o package ID precisa ser único em toda a loja.
+> O diagrama acima é editável em [Excalidraw](https://excalidraw.com/) (arquivo `grafico_projeto.excalidraw.svg`). Há também uma versão Mermaid clicável em [`mermaid.txt`](./mermaid.txt).
 
-### Versionamento semântico
-
-A versão visível ao usuário segue o padrão `MAJOR.MINOR.PATCH`:
+### Fluxo de dados
 
 ```
-MAJOR — mudanças incompatíveis (redesign completo, nova arquitetura)
-MINOR — novas funcionalidades sem quebrar nada (nova tela, novo relatório)
-PATCH — correções de bugs (crash resolvido, cálculo errado corrigido)
+NovaTransacaoScreen ──┐
+DetalheTransacaoScreen├─► useTransacoes() ─► TransacoesContext ─► database/db.js ─► SQLite (minhasfinancas.db)
+DashboardScreen ──────┘                            │
+RelatorioScreen ───────────────────────────────────┘  (deriva saldo/receitas/despesas do estado)
+
+CartaoCotacoes ─► useCotacoes() ─► API de câmbio (USD-BRL / EUR-BRL)
+NovaTransacaoScreen ─► useLocalizacao() ─► expo-location (GPS)
+NovaTransacaoScreen ─► useComprovante() ─► expo-image-picker (câmera / galeria)
+MapaScreen / SeletorLocalMapa ─► MapaCompat ─► react-native-maps (nativo) | react-leaflet + OpenStreetMap (web)
 ```
 
-O `versionCode` (Android) e o `buildNumber` (iOS) são números internos que as lojas usam para identificar qual build é mais recente. Eles **sempre sobem** — nunca podem ser iguais ou menores que o build anterior.
+---
+
+## Funcionalidades
+
+- **Lançamento de transações** — descrição, valor, tipo (receita/despesa), categoria e data
+- **Saldo em tempo real** — receitas, despesas e saldo recalculados a cada lançamento (`receitas − despesas`)
+- **Lista de transações** — ordenadas da mais recente para a mais antiga; toque abre o detalhe, toque longo exclui
+- **Tela de detalhe** — todos os dados da transação, local (quando há coordenadas) e foto do comprovante; botão "Excluir" com confirmação
+- **Relatório do mês** — barra proporcional receitas × despesas, legenda com valores e saldo do período
+- **Cotações de moedas** — dólar e euro no Dashboard, via API pública (`useCotacoes`)
+- **Geolocalização da transação** — botão "Minha localização" usa o GPS do aparelho
+- **Escolha manual no mapa** — modal `SeletorLocalMapa` onde o usuário toca para marcar o ponto
+- **Tela "Mapa"** — todas as transações com coordenadas plotadas; pino verde para receita, vermelho para despesa, e `Callout` com descrição/valor/data
+- **Comprovante fotográfico** — "Tirar foto" (câmera) ou "Da galeria" (`expo-image-picker`), com preview e remoção
+- **Onboarding de primeiro acesso** — tela de boas-vindas exibida só uma vez (flag em `AsyncStorage`)
+- **Persistência local com SQLite** — dados sobrevivem a fechar/reabrir o app, com **migração automática** de bancos de versões anteriores (`PRAGMA table_info` + `ALTER TABLE`)
+- **Cross-platform de verdade** — Android, iOS e Web; a camada `MapaCompat.native.js` / `MapaCompat.web.js` esconde a diferença entre `react-native-maps` e `react-leaflet`
+- **Testes E2E** — roteiros das aulas executados automaticamente no Expo Web
+
+### Telas
+
+| Tela | Aba | O que faz |
+|------|-----|-----------|
+| `BoasVindasScreen` | — | Onboarding exibido apenas no primeiro acesso |
+| `DashboardScreen` | Dashboard | Cartão de saldo, cards de resumo, cotações e lista de transações |
+| `DetalheTransacaoScreen` | (stack do Dashboard) | Detalhes da transação, local, comprovante e exclusão |
+| `NovaTransacaoScreen` | Nova Transação | Formulário com seções de localização (GPS / mapa) e comprovante (câmera / galeria) |
+| `RelatorioScreen` | Relatório | Barra proporcional receitas × despesas e saldo do mês |
+| `MapaScreen` | Mapa | Mapa com pinos de todas as transações geolocalizadas |
+| `SobreScreen` | Sobre | Informações do app, versão e stack |
 
 ---
 
-## Ícone e Splash Screen
+## Stack tecnológica
 
-As lojas exigem assets em dimensões específicas. O Expo cuida de gerar os tamanhos menores a partir das imagens originais, então você só precisa fornecer as versões grandes.
+- **Expo SDK** `~54.0.34` · **React** `19.1.0` · **React Native** `0.81.5` (New Architecture habilitada)
+- **React Navigation `7.x`** — Native + Bottom Tabs + Native Stack + Drawer
+- **expo-sqlite** `~16.0.10` — banco local de transações (no Web roda via WebAssembly + IndexedDB)
+- **@react-native-async-storage/async-storage** `2.2.0` — flag de primeiro acesso
+- **expo-location** `~19.0.8` — acesso ao GPS
+- **react-native-maps** `1.20.1` — mapa nativo no Android/iOS
+- **leaflet** `^1.9.4` + **react-leaflet** `^5.0.0` — mapa no Expo Web (tiles do OpenStreetMap, sem chave de API)
+- **expo-image-picker** `~17.0.11` — câmera e galeria
+- **Jest + Puppeteer** — testes E2E no Expo Web
+- **EAS Build** — compilação na nuvem e publicação nas lojas
 
-| Asset | Dimensão | Formato | Uso |
-|-------|----------|---------|-----|
-| `icon.png` | 1024×1024 px | PNG **sem** transparência | iOS e Android |
-| `adaptive-icon.png` | 1024×1024 px | PNG **com** transparência | Android (ícones adaptativos) |
-| `splash.png` | 1284×2778 px | PNG | Tela de carregamento |
-
-**Por que Android tem dois ícones?** O sistema de ícones adaptativos do Android (introduzido no Android 8) separa o fundo do ícone (definido pelo sistema/fabricante) do elemento frontal (o seu desenho). Isso permite que o launcher aplique formas diferentes (círculo, quadrado arredondado) sem distorcer o ícone.
-
-**Splash screen:** aparece por menos de 2 segundos enquanto o app carrega. Mantenha simples — logo e fundo, sem texto desnecessário.
-
----
-
-## EAS Build — Compilação na Nuvem
-
-O Expo Application Services (EAS) compila o app nos servidores da Expo, eliminando a necessidade de ter Android Studio configurado (para Android) ou um Mac com Xcode (para iOS).
-
-### Por que EAS em vez de `expo build`?
-
-| | `expo build` (antigo) | EAS Build (atual) |
-|---|---|---|
-| Status | Depreciado desde 2023 | Recomendado oficialmente |
-| Customização | Limitada | Total (bare workflow) |
-| Velocidade | Lenta | Significativamente mais rápida |
-
-### Os três perfis de build
-
-O arquivo `eas.json` define os perfis de build. Cada perfil serve a um momento diferente do ciclo de vida:
-
-| Perfil | Momento de uso | Formato gerado |
-|--------|---------------|----------------|
-| `development` | Desenvolvimento ativo — inclui ferramentas de debug | APK com Expo Dev Client |
-| `preview` | Distribuição para testadores sem passar pela loja | APK instalável diretamente |
-| `production` | Publicação na loja | AAB (Google Play) / IPA (App Store) |
-
-**APK vs AAB:** O APK é o formato de instalação direta — funciona em qualquer Android. O AAB (Android App Bundle) é enviado à Google Play, que então gera APKs otimizados para cada dispositivo (menor download para o usuário final).
+Permissões declaradas no [`app.json`](./app.json): localização (fine/coarse), câmera e microfone.
 
 ---
 
-## Keystore — Assinatura do App
+## Como rodar
 
-Todo app Android precisa ser assinado com uma chave criptográfica antes de ser distribuído. Essa chave é armazenada no **Keystore**.
+Pré-requisitos: Node.js LTS e o app **Expo Go** no celular (ou um emulador Android/iOS).
 
-- O EAS gera e armazena o Keystore automaticamente na primeira vez
-- Sem o Keystore original, é impossível enviar atualizações para o mesmo app na loja
-- **Guarde o Keystore em local seguro** — perder significa criar um app novo do zero
+```bash
+# 1. Instalar dependências
+npm install
 
----
+# 2. Iniciar o bundler
+npx expo start
+#   pressione  a  → abre no Android
+#   pressione  i  → abre no iOS
+#   pressione  w  → abre no navegador (Expo Web, mapa via Leaflet/OpenStreetMap)
 
-## Google Play — Fluxo de Publicação
-
-A Google Play organiza a distribuição em faixas progressivas:
-
-```
-Teste Interno → Teste Fechado → Teste Aberto → Produção
-```
-
-| Faixa | Quem pode instalar | Revisão da Google | Limite |
-|-------|--------------------|-------------------|--------|
-| Teste interno | Lista de e-mails manual | Não | 100 pessoas |
-| Teste fechado (Alpha) | Lista de e-mails / grupo | Não | 2.000 pessoas |
-| Teste aberto (Beta) | Qualquer um com o link | Sim | Ilimitado |
-| Produção | Todos na loja | Sim | Ilimitado |
-
-**Por que começar pelo Teste Interno?** Porque é a única faixa sem revisão e sem limite de tempo — o app fica disponível em minutos. É ideal para validar que o build funciona antes de se comprometer com o processo de revisão.
-
-**Taxa de desenvolvedor:** US$ 25, paga uma vez, válida para sempre. A aprovação da conta pode levar até 48 horas — crie com antecedência.
-
----
-
-## App Store — Fluxo de Publicação
-
-A Apple exige revisão humana para qualquer distribuição pública. O processo segue este caminho:
-
-```
-Build (EAS) → TestFlight (teste interno) → Revisão da Apple → App Store
+# Atalhos prontos:
+npm run android   # expo start --android
+npm run ios       # expo start --ios
+npm run web       # expo start --web
 ```
 
-| Etapa | Descrição |
-|-------|-----------|
-| EAS Build | Compila o `.ipa` nos servidores (não precisa de Mac) |
-| TestFlight | Programa oficial de testes da Apple — distribui para até 10.000 usuários sem revisão pública |
-| Revisão | Equipe da Apple analisa o app (1 a 3 dias úteis em média) |
-| App Store | Publicação pública |
+Se o Expo Go não conectar (rede restritiva):
 
-**Diferença de custo:** US$ 99/ano (contra US$ 25 único da Google). A assinatura anual é obrigatória para manter o app na loja.
+```bash
+npx expo start --tunnel
+# ou, via USB:
+adb reverse tcp:8081 tcp:8081 && npx expo start
+```
 
-### Comparativo
-
-| | Google Play | App Store |
-|---|---|---|
-| Conta | US$ 25 (taxa única) | US$ 99/ano |
-| Precisa de Mac? | Não | Não (com EAS Build) |
-| Tempo de revisão | Horas a 1 dia | 1 a 3 dias úteis |
-| Teste sem loja | APK direto | TestFlight |
-| Formato | `.aab` / `.apk` | `.ipa` |
+> No modo Web, dá para inspecionar o banco SQLite com `scripts/inspect-web-db.sh`.
 
 ---
 
-## OTA Updates — Atualizações sem Build
+## Testes
 
-Uma das vantagens do Expo é poder atualizar o JavaScript do app **sem um novo build** e sem passar pela revisão da loja. Isso é chamado de OTA (Over-The-Air).
+Testes E2E (Jest + Puppeteer) rodam contra o app no Expo Web. Em **dois terminais**:
 
-### Quando usar OTA vs novo build
+```bash
+# Terminal 1 — sobe o app
+npx expo start --web
 
-| Tipo de mudança | OTA é suficiente? |
-|-----------------|:-----------------:|
-| Correção de bug em lógica JS | ✅ sim |
-| Nova tela ou componente | ✅ sim |
-| Mudança de cores e textos | ✅ sim |
-| Nova permissão no sistema | ❌ novo build |
-| Instalação de biblioteca nativa | ❌ novo build |
-| Mudança de ícone ou splash | ❌ novo build |
+# Terminal 2 — roda os testes
+cd tests && npm install && npm test
+```
 
-**Por que essa limitação?** O OTA atualiza apenas o bundle JavaScript. Qualquer coisa que envolva código nativo (Java/Kotlin no Android, Swift/Obj-C no iOS) exige recompilação — e portanto novo build.
+Variáveis úteis: `BASE_URL` (default `http://localhost:8081`) e `HEADLESS` (`false` mostra o Chromium). Relatórios HTML são gerados em `tests/reports/`. Detalhes, cobertura por aula e como simular falhas didáticas: [`tests/README.md`](./tests/README.md).
 
 ---
 
-> **Atividade prática:** O passo a passo completo — configuração do `app.json`, criação do ícone, build com EAS e publicação na Google Play — está no [conteúdo complementar](./STEPS.md).
+## Build e publicação (EAS)
 
-## Checklist de Produção
+Os perfis de build estão em [`eas.json`](./eas.json):
 
-Antes de publicar, verifique cada item:
+| Perfil | Uso | Saída |
+|--------|-----|-------|
+| `development` | Desenvolvimento com Dev Client | APK |
+| `preview` | Distribuição interna a testadores | APK |
+| `production` | Publicação nas lojas | AAB (Android) / IPA (iOS) |
 
-### Assets
-- [ ] `icon.png` 1024×1024 sem transparência
-- [ ] `adaptive-icon.png` 1024×1024 com transparência
-- [ ] `splash.png` 1284×2778
+```bash
+npm install -g eas-cli
+eas login
+eas build --profile preview --platform android      # APK de teste
+eas build --profile production --platform android   # AAB para a Google Play
+eas submit --platform android                        # envia para a Play Console
+```
 
-### app.json
-- [ ] `name` definido corretamente
-- [ ] `version` definida ("1.0.0")
-- [ ] `android.package` único (ex: `com.seunome.minhasfinancas`)
-- [ ] `android.versionCode` = 1
-- [ ] `ios.bundleIdentifier` definido
-
-### Funcional
-- [ ] App funciona sem erros no emulador
-- [ ] Dados persistem ao fechar e reabrir
-- [ ] Nenhum `console.log` com dados sensíveis
-
-### Loja
-- [ ] Conta de desenvolvedor criada e aprovada
-- [ ] Ficha da loja preenchida (título, descrição, screenshots, categoria)
-- [ ] Classificação de conteúdo respondida
+Há também um workflow do EAS em `.eas/workflows/create-production-builds.yml`. O guia completo de configuração do `app.json`, ícones, build e publicação na Google Play / App Store está em [`STEPS.md`](./STEPS.md).
 
 ---
 
-## Referências
+## Versionamento
 
-- [EAS Build — documentação oficial](https://docs.expo.dev/build/introduction/)
-- [Publicar na Google Play com EAS](https://docs.expo.dev/submit/android/)
-- [OTA Updates com eas update](https://docs.expo.dev/eas-update/introduction/)
-- [app.json — todas as propriedades](https://docs.expo.dev/versions/latest/config/app/)
-- [Google Play Console](https://play.google.com/console)
-- [Diretrizes de revisão da App Store](https://developer.apple.com/app-store/review/guidelines/)
+Cada aula do módulo entrega uma nova versão (SemVer) — normalmente um incremento **MINOR**, por adicionar funcionalidades sem quebrar o que já existe:
+
+| Versão | Aula | Mudança principal |
+|--------|------|-------------------|
+| `1.0.0` | 01 | Cabeçalho + contador interativo |
+| `1.1.0` | 02 | Tela principal: saldo, cards de resumo e lista de transações |
+| `1.2.0` | 03 | Navegação por Bottom Tabs + Stack, 6 telas e onboarding |
+| `1.3.0` | 04 | Context API + AsyncStorage, cotações, Drawer e testes E2E |
+| `1.4.0` | 05 | Persistência com SQLite + onboarding persistido; suporte ao Expo Web |
+| `1.5.0` | 06 | Geolocalização, mapas cross-platform (RN-Maps + Leaflet) e câmera/comprovante |
+| `1.6.0` | 07 | Publicação e deploy (EAS Build, lojas, OTA updates) |
+
+Detalhes de cada release, regras de SemVer e o passo a passo para publicar no GitHub: [`RELEASE.md`](./RELEASE.md).
+
+---
+
+## Documentação do repositório
+
+- [`STEPS.md`](./STEPS.md) — tutorial passo a passo das aulas
+- [`RELEASE.md`](./RELEASE.md) — versionamento semântico e notas de release
+- [`tests/README.md`](./tests/README.md) — testes E2E: como rodar, cobertura e simulação de falhas
+- [`mermaid.txt`](./mermaid.txt) — diagrama de arquitetura em Mermaid (com links para os arquivos)
+- [`grafico_projeto.excalidraw.svg`](./grafico_projeto.excalidraw.svg) — diagrama de arquitetura em Excalidraw (a imagem no topo)
+
+---
+
+## Estrutura de pastas
+
+```
+minhas-financas/
+├── App.js · index.js · app.json · eas.json · theme.js · metro.config.js
+├── assets/                 ícones (Android/iOS/Web), splash e play store
+├── components/             CardsResumo, CartaoSaldo, CartaoCotacoes, ItemTransacao,
+│                           SeletorLocalMapa, MapaCompat.native.js, MapaCompat.web.js
+├── context/                TransacoesContext, PrimeiroAcessoContext
+├── database/               db.js (SQLite + migração)
+├── hooks/                  useCotacoes, useLocalizacao, useComprovante
+├── routes/                 TabRoutes, DashboardStack, DrawerRoutes
+├── screens/                BoasVindas, Dashboard, DetalheTransacao, NovaTransacao,
+│                           Relatorio, Mapa, Sobre
+├── scripts/                inspect-web-db.sh
+├── tests/                  suítes Jest + Puppeteer e relatórios HTML
+├── STEPS.md · RELEASE.md
+└── grafico_projeto.excalidraw.svg · mermaid.txt
+```
+
