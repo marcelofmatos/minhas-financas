@@ -39,6 +39,39 @@ if [ -z "${GOOGLE_MAPS_API_KEY:-}" ]; then
 fi
 export GOOGLE_MAPS_API_KEY
 
+# Build local (--local) precisa do Android SDK e do JDK 17 — valida antes de começar.
+case " $* " in
+  *" --local "*)
+    if [ -z "${ANDROID_HOME:-}" ] && [ -z "${ANDROID_SDK_ROOT:-}" ]; then
+      if [ -d "$HOME/Android/Sdk" ]; then
+        echo ">> ANDROID_HOME não definida — usando $HOME/Android/Sdk."
+        export ANDROID_HOME="$HOME/Android/Sdk"
+      else
+        echo ">> ERRO: ANDROID_HOME não definida e não encontrei $HOME/Android/Sdk."
+        echo "   Instale o Android SDK e rode:  export ANDROID_HOME=\$HOME/Android/Sdk"
+        exit 1
+      fi
+    fi
+    SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+    if [ ! -d "$SDK_DIR/platform-tools" ]; then
+      echo ">> ERRO: '$SDK_DIR' não parece um Android SDK válido (faltou platform-tools/)."
+      exit 1
+    fi
+    export ANDROID_HOME="$SDK_DIR"
+
+    if ! command -v java >/dev/null 2>&1; then
+      echo ">> ERRO: 'java' não encontrado no PATH. O build local precisa do JDK 17."
+      exit 1
+    fi
+    JAVA_MAJOR=$(java -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p')
+    if [ "$JAVA_MAJOR" != "17" ]; then
+      echo ">> AVISO: java em uso é a versão ${JAVA_MAJOR:-desconhecida}; o build local do Android espera o JDK 17."
+      echo "   Ajuste o JAVA_HOME para um JDK 17 se o build falhar."
+      echo
+    fi
+    ;;
+esac
+
 if command -v eas >/dev/null 2>&1; then
   EAS=(eas)
 else
