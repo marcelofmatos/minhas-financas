@@ -60,6 +60,27 @@ export async function inserirTransacao(t) {
   );
 }
 
+// Atualiza uma transação existente pelo id.
+// `data` (data de criação) NÃO é atualizada — preserva o registro original.
+export async function atualizarTransacao(t) {
+  await db.runAsync(
+    `UPDATE transacoes
+        SET descricao=?, valor=?, tipo=?, categoria=?,
+            latitude=?, longitude=?, comprovante=?
+      WHERE id = ?`,
+    [
+      t.descricao,
+      t.valor,
+      t.tipo,
+      t.categoria,
+      t.latitude    ?? null,
+      t.longitude   ?? null,
+      t.comprovante ?? null,
+      t.id,
+    ]
+  );
+}
+
 // Remove uma transação pelo id
 export async function excluirTransacao(id) {
   await db.runAsync('DELETE FROM transacoes WHERE id = ?', [id]);

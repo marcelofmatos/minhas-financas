@@ -90,15 +90,27 @@ export function DetalheTransacaoScreen({ route, navigation }) {
           </View>
         )}
 
-        <TouchableOpacity
-          style={styles.botaoExcluir}
-          onPress={confirmarExclusao}
-          accessibilityRole="button"
-          accessibilityLabel="Excluir transação"
-        >
-          <Ionicons name="trash-outline" size={20} color={cores.despesa} />
-          <Text style={styles.textoExcluir}>Excluir</Text>
-        </TouchableOpacity>
+        <View style={styles.botoesAcao}>
+          <TouchableOpacity
+            style={styles.botaoEditar}
+            onPress={() => navigation.navigate('EditarTransacao', { transacao })}
+            accessibilityRole="button"
+            accessibilityLabel="Editar transação"
+          >
+            <Ionicons name="create-outline" size={20} color={cores.primaria} />
+            <Text style={styles.textoEditar}>Editar</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.botaoExcluir}
+            onPress={confirmarExclusao}
+            accessibilityRole="button"
+            accessibilityLabel="Excluir transação"
+          >
+            <Ionicons name="trash-outline" size={20} color={cores.despesa} />
+            <Text style={styles.textoExcluir}>Excluir</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -145,13 +157,31 @@ const styles = StyleSheet.create({
     borderRadius: raio.md,
     backgroundColor: '#eee',
   },
-  botaoExcluir: {
+  botoesAcao: {
+    flexDirection: 'row',
+    gap: espacamento.sm,
+    width: '100%',
+    marginTop: espacamento.lg,
+  },
+  botaoEditar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    width: '100%',
-    marginTop: espacamento.lg,
+    paddingVertical: espacamento.md,
+    borderRadius: raio.md,
+    borderWidth: 1,
+    borderColor: cores.primaria,
+    backgroundColor: 'transparent',
+  },
+  textoEditar: { fontSize: 16, fontWeight: '600', color: cores.primaria },
+  botaoExcluir: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     paddingVertical: espacamento.md,
     borderRadius: raio.md,
     borderWidth: 1,

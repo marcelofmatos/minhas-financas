@@ -4,6 +4,7 @@ import {
   inicializarBanco,
   buscarTodasTransacoes,
   inserirTransacao,
+  atualizarTransacao,
   excluirTransacao,
 } from '../database/db';
 
@@ -37,6 +38,13 @@ export function TransacoesProvider({ children }) {
     setTransacoes(prev => [novaTransacao, ...prev]);
   }
 
+  async function editarTransacao(transacaoAtualizada) {
+    await atualizarTransacao(transacaoAtualizada);
+    setTransacoes(prev =>
+      prev.map(t => (t.id === transacaoAtualizada.id ? transacaoAtualizada : t))
+    );
+  }
+
   async function removerTransacao(id) {
     await excluirTransacao(id);
     setTransacoes(prev => prev.filter(t => t.id !== id));
@@ -57,6 +65,7 @@ export function TransacoesProvider({ children }) {
     despesas,
     saldo: receitas - despesas,
     adicionarTransacao,
+    editarTransacao,
     removerTransacao,
   };
 
